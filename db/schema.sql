@@ -1,0 +1,2 @@
+-- Schema SQL for Chess Analyzer database
+-- SQLite schema definition to be added.
