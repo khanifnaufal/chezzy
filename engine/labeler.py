@@ -128,12 +128,14 @@ def label_move(score_before: dict, score_after: dict, is_white: bool, is_rare: b
     else:
         return "Good"
 
-def analyze_game(pgn_text: str) -> list:
+def analyze_game(pgn_text: str, depth: int = 15, progress_callback=None) -> list:
     """
     Combines parser, evaluator, and labeler to analyze an entire chess game.
     
     Args:
         pgn_text (str): The PGN string of the game to analyze.
+        depth (int): Stockfish depth for analysis.
+        progress_callback (callable): Optional callback taking (current_move, total_moves)
         
     Returns:
         list of dict: A list of move analyses, each containing:
@@ -152,11 +154,18 @@ def analyze_game(pgn_text: str) -> list:
         error_msgs = "; ".join(str(err) for err in game.errors)
         raise ValueError(f"PGN validation errors: {error_msgs}")
         
+    # Count total moves first for progress tracking
+    total_moves = 0
+    temp_node = game
+    while not temp_node.is_end():
+        total_moves += 1
+        temp_node = temp_node.next()
+        
     board = game.board()
     results = []
     
     # Get initial board evaluation
-    current_score = get_evaluation(board)
+    current_score = get_evaluation(board, depth=depth)
     
     node = game
     while not node.is_end():
@@ -172,7 +181,7 @@ def analyze_game(pgn_text: str) -> list:
         board.push(move)
         
         # Evaluate the resulting position
-        score_after = get_evaluation(board)
+        score_after = get_evaluation(board, depth=depth)
         
         # Determine the label
         label = label_move(current_score, score_after, is_white, is_rare)
@@ -184,6 +193,9 @@ def analyze_game(pgn_text: str) -> list:
             "label": label
         })
         
+        if progress_callback:
+            progress_callback(len(results), total_moves)
+            
         # Reuse evaluation for the next move
         current_score = score_after
         node = next_node

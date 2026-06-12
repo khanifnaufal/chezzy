@@ -1,8 +1,17 @@
 import os
+import sys
+import asyncio
 import shutil
 import chess
 import chess.engine
 from dotenv import load_dotenv
+
+# Set asyncio event loop policy for Windows to support subprocesses in threads
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:
+        pass
 
 # Load environmental variables from .env
 load_dotenv()
