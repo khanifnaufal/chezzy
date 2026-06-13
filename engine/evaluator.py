@@ -4,7 +4,12 @@ import asyncio
 import shutil
 import chess
 import chess.engine
-from dotenv import load_dotenv
+# Add parent directory to sys.path to allow config import when run as a standalone script
+PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)
+
+from config import STOCKFISH_PATH, STOCKFISH_DEPTH
 
 # Set asyncio event loop policy for Windows to support subprocesses in threads
 if sys.platform == "win32":
@@ -12,9 +17,6 @@ if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     except Exception:
         pass
-
-# Load environmental variables from .env
-load_dotenv()
 
 class StockfishNotFoundError(FileNotFoundError):
     """Exception raised when Stockfish binary is not found or is invalid."""
@@ -27,7 +29,7 @@ def _get_stockfish_path() -> str:
     1. STOCKFISH_PATH environment variable (set via environment or .env file)
     2. System PATH (via shutil.which)
     """
-    path = os.getenv("STOCKFISH_PATH")
+    path = STOCKFISH_PATH
     if path:
         # Check if the configured path actually exists and is a file
         if os.path.isfile(path):
@@ -45,7 +47,7 @@ def _get_stockfish_path() -> str:
             
     return None
 
-def get_evaluation(board: chess.Board, depth: int = 15) -> dict:
+def get_evaluation(board: chess.Board, depth: int = STOCKFISH_DEPTH) -> dict:
     """
     Evaluates the current chess board position using Stockfish.
     

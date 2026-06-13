@@ -5,14 +5,14 @@ import chess
 import chess.svg
 import streamlit as st
 import plotly.graph_objects as go
-from dotenv import load_dotenv
 
+from config import STOCKFISH_DEPTH, STOCKFISH_PATH, DB_PATH
 from db.database import init_db, save_game, get_all_games, get_moves_by_game
 from engine.labeler import analyze_game
+from engine.evaluator import StockfishNotFoundError
 from parser.pgn_parser import parse_pgn
 
-# Load env variables and init database
-load_dotenv()
+# Init database
 init_db()
 
 # Page configuration
@@ -75,6 +75,9 @@ def clean_game_meta(meta: dict) -> dict:
     return cleaned
 
 # Initialize session state variables
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "🔍 Analyzer"
+
 if "analysis_results" not in st.session_state:
     # Try loading the latest game from database as default
     games = get_all_games()
@@ -442,310 +445,382 @@ with st.sidebar:
     st.markdown('<div class="app-title">Chezzy ♟️</div>', unsafe_allow_html=True)
     st.markdown('<div class="app-subtitle">Chess Game Analyzer</div>', unsafe_allow_html=True)
     
-    # PGN Input text area
-    pgn_input = st.text_area(
-        "PGN Input",
-        value=st.session_state.pgn_text,
-        height=220,
-        placeholder="Paste your PGN game here..."
+    # Navigation Radio
+    page_options = ["🔍 Analyzer", "📜 History"]
+    default_idx = page_options.index(st.session_state.current_page) if st.session_state.current_page in page_options else 0
+    page = st.radio(
+        "Menu",
+        page_options,
+        index=default_idx,
+        label_visibility="collapsed"
     )
-    # Sync with session state
-    st.session_state.pgn_text = pgn_input
+    st.session_state.current_page = page
+    st.markdown("---")
     
-    # Engine search depth
-    depth_val = st.slider(
-        "Stockfish Depth",
-        min_value=5,
-        max_value=18,
-        value=15,
-        step=1,
-        help="Higher values are more precise but take longer."
-    )
-    
-    # Analyze Button
-    if st.button("Analyze Game", type="primary", use_container_width=True):
-        if not pgn_input.strip():
-            st.error("Please paste a PGN string to analyze.")
-        else:
-            # Parse PGN first to validate format
-            parsed_meta = None
-            try:
-                parsed_meta = parse_pgn(pgn_input)
-            except ValueError as err:
-                st.error(f"PGN Error: {str(err)}")
-                
-            if parsed_meta:
-                parsed_meta = clean_game_meta(parsed_meta)
+    if page == "🔍 Analyzer":
+        # PGN Input text area
+        pgn_input = st.text_area(
+            "PGN Input",
+            value=st.session_state.pgn_text,
+            height=220,
+            placeholder="Paste your PGN game here..."
+        )
+        # Sync with session state
+        st.session_state.pgn_text = pgn_input
+        
+        # Engine search depth
+        depth_val = st.slider(
+            "Stockfish Depth",
+            min_value=5,
+            max_value=18,
+            value=STOCKFISH_DEPTH,
+            step=1,
+            help="Higher values are more precise but take longer."
+        )
+        
+        # Analyze Button
+        if st.button("Analyze Game", type="primary", use_container_width=True):
+            if not pgn_input.strip():
+                st.error("Please paste a PGN string to analyze.")
+            else:
+                # Parse PGN first to validate format
+                parsed_meta = None
                 try:
-                    # Create analysis loading layout
-                    progress_container = st.empty()
-                    with progress_container.container():
-                        st.write("### Analyzing game moves...")
-                        progress_bar = st.progress(0.0)
-                        status_text = st.empty()
-                        
-                        def update_progress(current, total):
-                            percent = float(current) / float(total)
-                            progress_bar.progress(percent)
-                            status_text.text(f"Evaluated move {current} of {total} plies...")
-                        
-                        # Run the stockfish analysis loop
-                        results = analyze_game(pgn_input, depth=depth_val, progress_callback=update_progress)
-                        
-                    progress_container.empty()
+                    parsed_meta = parse_pgn(pgn_input)
+                except ValueError as err:
+                    st.error(f"⚠️ Invalid PGN: {str(err)}")
                     
-                    # Persist game and moves in database
-                    with st.spinner("Saving game analysis to database..."):
-                        game_data = {
+                if parsed_meta:
+                    parsed_meta = clean_game_meta(parsed_meta)
+                    try:
+                        # Create analysis loading layout
+                        progress_container = st.empty()
+                        with progress_container.container():
+                            st.write("### Menganalisis permainan catur...")
+                            progress_bar = st.progress(0.0)
+                            status_text = st.empty()
+                            
+                            def update_progress(current, total):
+                                percent = float(current) / float(total)
+                                progress_bar.progress(percent)
+                                status_text.text(f"Mengevaluasi langkah {current} dari {total} plies...")
+                            
+                            # Run the stockfish analysis loop with a spinner
+                            with st.spinner("Stockfish sedang mengevaluasi langkah... Mohon tunggu."):
+                                results = analyze_game(pgn_input, depth=depth_val, progress_callback=update_progress)
+                                
+                        progress_container.empty()
+                        
+                        # Persist game and moves in database
+                        with st.spinner("Menyimpan hasil analisis ke database..."):
+                            game_data = {
+                                "white": parsed_meta["white"],
+                                "black": parsed_meta["black"],
+                                "date": parsed_meta["date"],
+                                "result": parsed_meta["result"],
+                                "pgn_raw": pgn_input
+                            }
+                            game_id = save_game(game_data, results)
+                            
+                        # Update active session state
+                        st.session_state.analysis_results = results
+                        st.session_state.game_metadata = clean_game_meta({
+                            "id": game_id,
                             "white": parsed_meta["white"],
                             "black": parsed_meta["black"],
                             "date": parsed_meta["date"],
                             "result": parsed_meta["result"],
                             "pgn_raw": pgn_input
-                        }
-                        game_id = save_game(game_data, results)
+                        })
+                        st.session_state.active_move_index = -1
+                        st.toast("Game successfully analyzed and saved!", icon="✅")
+                        st.rerun()
                         
-                    # Update active session state
-                    st.session_state.analysis_results = results
-                    st.session_state.game_metadata = clean_game_meta({
-                        "id": game_id,
-                        "white": parsed_meta["white"],
-                        "black": parsed_meta["black"],
-                        "date": parsed_meta["date"],
-                        "result": parsed_meta["result"],
-                        "pgn_raw": pgn_input
-                    })
-                    st.session_state.active_move_index = -1
-                    st.toast("Game successfully analyzed and saved!", icon="✅")
-                    st.rerun()
-                    
-                except Exception as err:
-                    st.error(f"Analysis Failed: {str(err)}")
-                    
-    st.markdown("---")
-    
-    # Game History Selector
-    st.subheader("Game History")
-    games_history = get_all_games()
-    if games_history:
-        game_options = {}
-        for g in games_history:
-            cleaned_g = clean_game_meta(g)
-            game_options[g["id"]] = f"{cleaned_g['white']} vs {cleaned_g['black']} ({cleaned_g['date']})"
-            
-        game_ids = list(game_options.keys())
-        game_labels = list(game_options.values())
-        
-        # Find index of currently loaded game to set as selectbox default
-        active_game_id = st.session_state.game_metadata.get("id") if st.session_state.game_metadata else None
-        default_idx = 0
-        if active_game_id in game_ids:
-            default_idx = game_ids.index(active_game_id)
-            
-        selected_game_label = st.selectbox(
-            "Select a game to load:",
-            options=game_labels,
-            index=default_idx
-        )
-        
-        selected_game_id = game_ids[game_labels.index(selected_game_label)]
-        
-        # Load the selected game from history if changed
-        if active_game_id != selected_game_id:
-            loaded_game = next(g for g in games_history if g["id"] == selected_game_id)
-            moves = get_moves_by_game(selected_game_id)
-            
-            st.session_state.analysis_results = moves
-            st.session_state.game_metadata = clean_game_meta({
-                "id": selected_game_id,
-                "white": loaded_game["white"],
-                "black": loaded_game["black"],
-                "date": loaded_game["date"],
-                "result": loaded_game["result"],
-                "pgn_raw": loaded_game["pgn_raw"]
-            })
-            st.session_state.active_move_index = -1
-            st.session_state.pgn_text = loaded_game["pgn_raw"]
-            st.rerun()
-    else:
-        st.info("No games in history database.")
+                    except StockfishNotFoundError as err:
+                        st.error("❌ Engine Stockfish Tidak Ditemukan!")
+                        st.markdown("""
+                        **Stockfish tidak dapat ditemukan atau dijalankan di sistem Anda.**
+                        
+                        ### Cara Instalasi & Konfigurasi Stockfish:
+                        1. **Unduh Stockfish**:
+                           - Kunjungi situs resmi [Stockfish Download Page](https://stockfishchess.org/download/) dan download versi yang sesuai untuk Operating System Anda.
+                        2. **Ekstrak & Pindahkan**:
+                           - Ekstrak file ZIP hasil download dan pindahkan executable `stockfish` (atau `stockfish.exe` di Windows) ke folder pilihan Anda (misalnya: `C:\\chess\\stockfish`).
+                        3. **Konfigurasi Path di File `.env`**:
+                           - Buat atau edit file bernama `.env` di folder root project ini.
+                           - Tentukan letak file binary Stockfish tersebut secara absolut:
+                             ```env
+                             STOCKFISH_PATH="C:/chess/stockfish/stockfish-windows-x86-64-avx2.exe"
+                             ```
+                             *(Catatan: Gunakan slash miring kanan `/` agar path terbaca dengan benar di berbagai OS)*
+                        4. **Jalankan Ulang Aplikasi**:
+                           - Restart server Streamlit untuk membaca konfigurasi baru.
+                        """)
+                    except Exception as err:
+                        st.error(f"Analysis Failed: {str(err)}")
 
 
 # --- Main Area ---
-if st.session_state.analysis_results is None:
-    # Welcome card if no game is loaded or analyzed
-    st.markdown("""
-    <div style="text-align: center; margin-top: 80px;">
-        <h1 style="font-size: 52px; font-weight: 700; color: #FFF; margin-bottom: 5px;">Chezzy ♟️</h1>
-        <p style="font-size: 18px; color: #888; margin-bottom: 35px;">Premium Chess Game Analyzer & Replayer</p>
-        <div style="background-color: #151922; padding: 25px 35px; border-radius: 12px; display: inline-block; border: 1px solid #2B3547; max-width: 550px; text-align: left; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-            <p style="color: #DDD; font-size: 16px; margin: 0 0 12px 0; font-weight: bold; border-bottom: 1px solid #2B3547; padding-bottom: 8px;">🚀 Quick Start Guide</p>
-            <ol style="color: #BBB; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.7;">
-                <li style="margin-bottom: 8px;">Paste a PGN game in the sidebar text box.</li>
-                <li style="margin-bottom: 8px;">Choose your desired <strong>Stockfish Depth</strong> (default 15).</li>
-                <li style="margin-bottom: 8px;">Press the <strong>Analyze Game</strong> button.</li>
-                <li style="margin-bottom: 8px;">Alternatively, select any previously analyzed game from the <strong>Game History</strong> list.</li>
-            </ol>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    meta = st.session_state.game_metadata
-    results = st.session_state.analysis_results
-    active_idx = st.session_state.active_move_index
-    total_moves = len(results)
-    
-    # Metadata Title Card
-    st.markdown(f"""
-    <div style="background-color: #151922; padding: 18px 22px; border-radius: 8px; border: 1px solid #2B3547; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
-        <h2 style="margin: 0; font-size: 26px; color: #FFF; font-weight: 600; letter-spacing: -0.5px;">{meta['white']} vs {meta['black']}</h2>
-        <p style="margin: 6px 0 0 0; color: #8C9BB4; font-size: 14px; font-weight: 500;">📅 Date: {meta['date']} &nbsp;|&nbsp; 🏆 Result: {meta['result']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 2 Column layout
-    col_board, col_table = st.columns([1.1, 0.9], gap="large")
-    
-    # Left Column: Chess Board & Replay controls
-    with col_board:
-        # Construct chess.Board up to the active move index
-        board = chess.Board()
-        for i in range(active_idx + 1):
-            board.push_san(results[i]["move"])
-            
-        last_move = board.peek() if active_idx >= 0 else None
-        
-        # Highlight king square if in check
-        is_check = board.is_check()
-        check_square = board.king(board.turn) if is_check else None
-        
-        # Generate SVG string
-        svg_data = chess.svg.board(
-            board=board,
-            lastmove=last_move,
-            check=check_square,
-            size=388
-        )
-        
-        # Center board inside an iframe
-        board_html = f"""
-        <div style="display: flex; justify-content: center; align-items: center; background-color: #0E1117; height: 388px; width: 388px; margin: auto;">
-            {svg_data}
-        </div>
-        """
-        st.components.v1.html(board_html, height=388, width=388)
-        
-        # Centered Replay Navigation Buttons
-        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-        btn_prev, btn_lbl, btn_next = st.columns([1, 2, 1])
-        
-        with btn_prev:
-            if st.button("←", use_container_width=True, disabled=(active_idx <= -1)):
-                st.session_state.active_move_index -= 1
-                st.rerun()
-                
-        with btn_lbl:
-            if active_idx == -1:
-                move_txt = "Start Position"
-            else:
-                m_info = results[active_idx]
-                m_num = (active_idx // 2) + 1
-                player = "White" if active_idx % 2 == 0 else "Black"
-                move_txt = f"{m_num}{'.' if player == 'White' else '...'} {m_info['move']} ({player})"
-            st.markdown(f"<p style='text-align: center; margin-top: 5px; font-weight: 600; font-size: 15px; color: #FFF;'>{move_txt}</p>", unsafe_allow_html=True)
-            
-        with btn_next:
-            if st.button("→", use_container_width=True, disabled=(active_idx >= total_moves - 1)):
-                st.session_state.active_move_index += 1
-                st.rerun()
-                
-        # Game review label counts card
-        labels = [r["label"] for r in results]
-        brilliant_cnt = labels.count("Brilliant")
-        good_cnt = labels.count("Good")
-        inacc_cnt = labels.count("Inaccuracy")
-        mistake_cnt = labels.count("Mistake")
-        blunder_cnt = labels.count("Blunder")
-        
-        st.markdown(f"""
-        <div style="display: flex; gap: 8px; justify-content: space-between; margin-top: 25px; background-color: #151922; padding: 15px; border-radius: 8px; border: 1px solid #2B3547; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-            <div style="text-align: center; flex: 1;">
-                <div style="color: #9B5DE5; font-size: 20px; font-weight: 700;">{brilliant_cnt}</div>
-                <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Brilliant</div>
-            </div>
-            <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
-                <div style="color: #2ECC71; font-size: 20px; font-weight: 700;">{good_cnt}</div>
-                <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Good</div>
-            </div>
-            <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
-                <div style="color: #F1C40F; font-size: 20px; font-weight: 700;">{inacc_cnt}</div>
-                <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Inaccuracy</div>
-            </div>
-            <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
-                <div style="color: #E67E22; font-size: 20px; font-weight: 700;">{mistake_cnt}</div>
-                <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Mistake</div>
-            </div>
-            <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
-                <div style="color: #E74C3C; font-size: 20px; font-weight: 700;">{blunder_cnt}</div>
-                <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Blunder</div>
+if page == "🔍 Analyzer":
+    if st.session_state.analysis_results is None:
+        # Welcome card if no game is loaded or analyzed
+        st.markdown("""
+        <div style="text-align: center; margin-top: 80px;">
+            <h1 style="font-size: 52px; font-weight: 700; color: #FFF; margin-bottom: 5px;">Chezzy ♟️</h1>
+            <p style="font-size: 18px; color: #888; margin-bottom: 35px;">Premium Chess Game Analyzer & Replayer</p>
+            <div style="background-color: #151922; padding: 25px 35px; border-radius: 12px; display: inline-block; border: 1px solid #2B3547; max-width: 550px; text-align: left; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <p style="color: #DDD; font-size: 16px; margin: 0 0 12px 0; font-weight: bold; border-bottom: 1px solid #2B3547; padding-bottom: 8px;">🚀 Quick Start Guide</p>
+                <ol style="color: #BBB; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.7;">
+                    <li style="margin-bottom: 8px;">Paste a PGN game in the sidebar text box.</li>
+                    <li style="margin-bottom: 8px;">Choose your desired <strong>Stockfish Depth</strong> (default 15).</li>
+                    <li style="margin-bottom: 8px;">Press the <strong>Analyze Game</strong> button.</li>
+                    <li style="margin-bottom: 8px;">Alternatively, switch to the <strong>History</strong> page via the sidebar to reload previously analyzed games.</li>
+                </ol>
             </div>
         </div>
         """, unsafe_allow_html=True)
+    else:
+        meta = st.session_state.game_metadata
+        results = st.session_state.analysis_results
+        active_idx = st.session_state.active_move_index
+        total_moves = len(results)
         
-    # Right Column: Move Analysis Table
-    with col_table:
-        table_html = generate_moves_table_html(results, active_idx)
-        st.components.v1.html(table_html, height=390)
-
-    # --- Post-Game Summary & Evaluation Graph (Below board and table) ---
-    stats = calculate_game_stats(results)
-    
-    st.markdown("<hr style='border-color: #2B3547; margin: 30px 0;'/>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #FFF; font-weight: 600; margin-bottom: 20px;'>📊 Post-Game Summary</h3>", unsafe_allow_html=True)
-    
-    # Row 1: Key Metrics (Accuracies & Worst Move)
-    col_acc1, col_acc2, col_worst = st.columns([1, 1, 2])
-    with col_acc1:
-        st.metric(label="White Accuracy", value=f"{stats['white_accuracy']:.1f}%")
-    with col_acc2:
-        st.metric(label="Black Accuracy", value=f"{stats['black_accuracy']:.1f}%")
-    with col_worst:
-        w_move = stats.get("worst_move")
-        if w_move:
-            pawn_loss = w_move['loss'] / 100.0
-            if w_move['loss'] >= 9000.0:
-                delta_str = "Mate Blunder"
-            else:
-                delta_str = f"-{pawn_loss:.2f} pawns"
-            st.metric(label=f"Worst Move ({w_move['player']})", value=w_move['move'], delta=delta_str, delta_color="normal")
-        else:
-            st.metric(label="Worst Move", value="None")
+        # Metadata Title Card
+        st.markdown(f"""
+        <div style="background-color: #151922; padding: 18px 22px; border-radius: 8px; border: 1px solid #2B3547; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
+            <h2 style="margin: 0; font-size: 26px; color: #FFF; font-weight: 600; letter-spacing: -0.5px;">{meta['white']} vs {meta['black']}</h2>
+            <p style="margin: 6px 0 0 0; color: #8C9BB4; font-size: 14px; font-weight: 500;">📅 Date: {meta['date']} &nbsp;|&nbsp; 🏆 Result: {meta['result']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2 Column layout
+        col_board, col_table = st.columns([1.1, 0.9], gap="large")
+        
+        # Left Column: Chess Board & Replay controls
+        with col_board:
+            # Construct chess.Board up to the active move index
+            board = chess.Board()
+            for i in range(active_idx + 1):
+                board.push_san(results[i]["move"])
+                
+            last_move = board.peek() if active_idx >= 0 else None
             
-    # Row 2: Detailed Move Classification Counts
-    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
-    col_w, col_b = st.columns(2, gap="large")
-    
-    with col_w:
-        st.markdown(f"<p style='color: #E0E0E0; font-weight: 600; margin-bottom: 12px;'>⚪ {meta['white']} (White) Breakdowns</p>", unsafe_allow_html=True)
-        w_cols = st.columns(5)
-        w_cols[0].metric("Brilliant", stats['white_counts']['Brilliant'])
-        w_cols[1].metric("Good", stats['white_counts']['Good'])
-        w_cols[2].metric("Inaccuracy", stats['white_counts']['Inaccuracy'])
-        w_cols[3].metric("Mistake", stats['white_counts']['Mistake'])
-        w_cols[4].metric("Blunder", stats['white_counts']['Blunder'])
+            # Highlight king square if in check
+            is_check = board.is_check()
+            check_square = board.king(board.turn) if is_check else None
+            
+            # Generate SVG string
+            svg_data = chess.svg.board(
+                board=board,
+                lastmove=last_move,
+                check=check_square,
+                size=388
+            )
+            
+            # Center board inside an iframe
+            board_html = f"""
+            <div style="display: flex; justify-content: center; align-items: center; background-color: #0E1117; height: 388px; width: 388px; margin: auto;">
+                {svg_data}
+            </div>
+            """
+            st.components.v1.html(board_html, height=388, width=388)
+            
+            # Centered Replay Navigation Buttons
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+            btn_prev, btn_lbl, btn_next = st.columns([1, 2, 1])
+            
+            with btn_prev:
+                if st.button("←", use_container_width=True, disabled=(active_idx <= -1)):
+                    st.session_state.active_move_index -= 1
+                    st.rerun()
+                    
+            with btn_lbl:
+                if active_idx == -1:
+                    move_txt = "Start Position"
+                else:
+                    m_info = results[active_idx]
+                    m_num = (active_idx // 2) + 1
+                    player = "White" if active_idx % 2 == 0 else "Black"
+                    move_txt = f"{m_num}{'.' if player == 'White' else '...'} {m_info['move']} ({player})"
+                st.markdown(f"<p style='text-align: center; margin-top: 5px; font-weight: 600; font-size: 15px; color: #FFF;'>{move_txt}</p>", unsafe_allow_html=True)
+                
+            with btn_next:
+                if st.button("→", use_container_width=True, disabled=(active_idx >= total_moves - 1)):
+                    st.session_state.active_move_index += 1
+                    st.rerun()
+                    
+            # Game review label counts card
+            labels = [r["label"] for r in results]
+            brilliant_cnt = labels.count("Brilliant")
+            good_cnt = labels.count("Good")
+            inacc_cnt = labels.count("Inaccuracy")
+            mistake_cnt = labels.count("Mistake")
+            blunder_cnt = labels.count("Blunder")
+            
+            st.markdown(f"""
+            <div style="display: flex; gap: 8px; justify-content: space-between; margin-top: 25px; background-color: #151922; padding: 15px; border-radius: 8px; border: 1px solid #2B3547; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                <div style="text-align: center; flex: 1;">
+                    <div style="color: #9B5DE5; font-size: 20px; font-weight: 700;">{brilliant_cnt}</div>
+                    <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Brilliant</div>
+                </div>
+                <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
+                    <div style="color: #2ECC71; font-size: 20px; font-weight: 700;">{good_cnt}</div>
+                    <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Good</div>
+                </div>
+                <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
+                    <div style="color: #F1C40F; font-size: 20px; font-weight: 700;">{inacc_cnt}</div>
+                    <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Inaccuracy</div>
+                </div>
+                <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
+                    <div style="color: #E67E22; font-size: 20px; font-weight: 700;">{mistake_cnt}</div>
+                    <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Mistake</div>
+                </div>
+                <div style="text-align: center; flex: 1; border-left: 1px solid #2B3547;">
+                    <div style="color: #E74C3C; font-size: 20px; font-weight: 700;">{blunder_cnt}</div>
+                    <div style="color: #8C9BB4; font-size: 11px; font-weight: 600; margin-top: 2px;">Blunder</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # Right Column: Move Analysis Table
+        with col_table:
+            table_html = generate_moves_table_html(results, active_idx)
+            st.components.v1.html(table_html, height=390)
+
+        # --- Post-Game Summary & Evaluation Graph (Below board and table) ---
+        stats = calculate_game_stats(results)
         
-    with col_b:
-        st.markdown(f"<p style='color: #E0E0E0; font-weight: 600; margin-bottom: 12px;'>⚫ {meta['black']} (Black) Breakdowns</p>", unsafe_allow_html=True)
-        b_cols = st.columns(5)
-        b_cols[0].metric("Brilliant", stats['black_counts']['Brilliant'])
-        b_cols[1].metric("Good", stats['black_counts']['Good'])
-        b_cols[2].metric("Inaccuracy", stats['black_counts']['Inaccuracy'])
-        b_cols[3].metric("Mistake", stats['black_counts']['Mistake'])
-        b_cols[4].metric("Blunder", stats['black_counts']['Blunder'])
+        st.markdown("<hr style='border-color: #2B3547; margin: 30px 0;'/>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #FFF; font-weight: 600; margin-bottom: 20px;'>📊 Post-Game Summary</h3>", unsafe_allow_html=True)
         
-    st.markdown("<hr style='border-color: #2B3547; margin: 30px 0;'/>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #FFF; font-weight: 600; margin-bottom: 15px;'>📈 Position Evaluation Graph</h3>", unsafe_allow_html=True)
+        # Row 1: Key Metrics (Accuracies & Worst Move)
+        col_acc1, col_acc2, col_worst = st.columns([1, 1, 2])
+        with col_acc1:
+            st.metric(label="White Accuracy", value=f"{stats['white_accuracy']:.1f}%")
+        with col_acc2:
+            st.metric(label="Black Accuracy", value=f"{stats['black_accuracy']:.1f}%")
+        with col_worst:
+            w_move = stats.get("worst_move")
+            if w_move:
+                pawn_loss = w_move['loss'] / 100.0
+                if w_move['loss'] >= 9000.0:
+                    delta_str = "Mate Blunder"
+                else:
+                    delta_str = f"-{pawn_loss:.2f} pawns"
+                st.metric(label=f"Worst Move ({w_move['player']})", value=w_move['move'], delta=delta_str, delta_color="normal")
+            else:
+                st.metric(label="Worst Move", value="None")
+                
+        # Row 2: Detailed Move Classification Counts
+        st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+        col_w, col_b = st.columns(2, gap="large")
+        
+        with col_w:
+            st.markdown(f"<p style='color: #E0E0E0; font-weight: 600; margin-bottom: 12px;'>⚪ {meta['white']} (White) Breakdowns</p>", unsafe_allow_html=True)
+            w_cols = st.columns(5)
+            w_cols[0].metric("Brilliant", stats['white_counts']['Brilliant'])
+            w_cols[1].metric("Good", stats['white_counts']['Good'])
+            w_cols[2].metric("Inaccuracy", stats['white_counts']['Inaccuracy'])
+            w_cols[3].metric("Mistake", stats['white_counts']['Mistake'])
+            w_cols[4].metric("Blunder", stats['white_counts']['Blunder'])
+            
+        with col_b:
+            st.markdown(f"<p style='color: #E0E0E0; font-weight: 600; margin-bottom: 12px;'>⚫ {meta['black']} (Black) Breakdowns</p>", unsafe_allow_html=True)
+            b_cols = st.columns(5)
+            b_cols[0].metric("Brilliant", stats['black_counts']['Brilliant'])
+            b_cols[1].metric("Good", stats['black_counts']['Good'])
+            b_cols[2].metric("Inaccuracy", stats['black_counts']['Inaccuracy'])
+            b_cols[3].metric("Mistake", stats['black_counts']['Mistake'])
+            b_cols[4].metric("Blunder", stats['black_counts']['Blunder'])
+            
+        st.markdown("<hr style='border-color: #2B3547; margin: 30px 0;'/>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #FFF; font-weight: 600; margin-bottom: 15px;'>📈 Position Evaluation Graph</h3>", unsafe_allow_html=True)
+        
+        fig = generate_evaluation_chart(results)
+        st.plotly_chart(fig, use_container_width=True)
+
+elif page == "📜 History":
+    st.markdown('<h1 style="font-size: 32px; font-weight: 700; color: #FFF; margin-bottom: 2px;">📜 Game History</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="font-size: 15px; color: #888; margin-bottom: 25px;">View and reload previously analyzed chess games from the database.</p>', unsafe_allow_html=True)
     
-    fig = generate_evaluation_chart(results)
-    st.plotly_chart(fig, use_container_width=True)
+    games_history = get_all_games()
+    if not games_history:
+        st.info("No games in history database yet. Go to the Analyzer tab and enter a PGN to analyze a game!")
+    else:
+        # Header Columns
+        col_date, col_players, col_result, col_w_acc, col_b_acc, col_action = st.columns([1.2, 2.5, 0.8, 1.2, 1.2, 1.1])
+        with col_date:
+            st.markdown("**Date**")
+        with col_players:
+            st.markdown("**White vs Black**")
+        with col_result:
+            st.markdown("**Result**")
+        with col_w_acc:
+            st.markdown("**White Acc.**")
+        with col_b_acc:
+            st.markdown("**Black Acc.**")
+        with col_action:
+            st.markdown("**Action**")
+        
+        st.markdown("<hr style='border-color: #2B3547; margin: 10px 0 15px 0;'/>", unsafe_allow_html=True)
+        
+        # Loop through games and calculate stats for display
+        for idx, g in enumerate(games_history):
+            cleaned_g = clean_game_meta(g)
+            moves = get_moves_by_game(g["id"])
+            stats = calculate_game_stats(moves)
+            
+            col_date, col_players, col_result, col_w_acc, col_b_acc, col_action = st.columns([1.2, 2.5, 0.8, 1.2, 1.2, 1.1])
+            
+            with col_date:
+                st.write(cleaned_g["date"])
+            with col_players:
+                st.write(f"⚪ {cleaned_g['white']} vs ⚫ {cleaned_g['black']}")
+            with col_result:
+                # Style result badge
+                res = cleaned_g["result"]
+                if res == "1-0":
+                    res_lbl = "🏆 1-0"
+                elif res == "0-1":
+                    res_lbl = "🏆 0-1"
+                elif res in ["1/2-1/2", "0.5-0.5"]:
+                    res_lbl = "🤝 Draw"
+                else:
+                    res_lbl = res
+                st.write(res_lbl)
+            
+            with col_w_acc:
+                w_acc = stats["white_accuracy"]
+                # Color code accuracy
+                if w_acc >= 90.0:
+                    color_hex = "#2ECC71"  # green
+                elif w_acc >= 75.0:
+                    color_hex = "#F1C40F"  # yellow
+                else:
+                    color_hex = "#E74C3C"  # red
+                st.markdown(f"<span style='color: {color_hex}; font-weight: 600;'>{w_acc:.1f}%</span>", unsafe_allow_html=True)
+                
+            with col_b_acc:
+                b_acc = stats["black_accuracy"]
+                # Color code accuracy
+                if b_acc >= 90.0:
+                    color_hex = "#2ECC71"  # green
+                elif b_acc >= 75.0:
+                    color_hex = "#F1C40F"  # yellow
+                else:
+                    color_hex = "#E74C3C"  # red
+                st.markdown(f"<span style='color: {color_hex}; font-weight: 600;'>{b_acc:.1f}%</span>", unsafe_allow_html=True)
+                
+            with col_action:
+                if st.button("Load 📂", key=f"hist_load_{g['id']}_{idx}", use_container_width=True):
+                    st.session_state.analysis_results = moves
+                    st.session_state.game_metadata = cleaned_g
+                    st.session_state.active_move_index = -1
+                    st.session_state.pgn_text = g["pgn_raw"]
+                    st.session_state.current_page = "🔍 Analyzer"
+                    st.toast(f"Loaded game: {cleaned_g['white']} vs {cleaned_g['black']}", icon="📥")
+                    st.rerun()
+                    
+            # Minor horizontal rule
+            st.markdown("<hr style='border-color: rgba(255, 255, 255, 0.05); margin: 8px 0;'/>", unsafe_allow_html=True)
 

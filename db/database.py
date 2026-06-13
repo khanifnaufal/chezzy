@@ -1,11 +1,16 @@
 import os
 import json
 import sqlite3
+import sys
 
-# Resolve database file path relative to this module directory (located inside 'db/')
-# to target '<project_root>/data/games.db'
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-DB_PATH = os.path.join(DB_DIR, "games.db")
+# Add parent directory to sys.path to allow config import when run as a standalone script
+PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)
+
+from config import DB_PATH
+
+DB_DIR = os.path.dirname(DB_PATH)
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
 
 

@@ -110,6 +110,32 @@ _(Evaluator akan langsung berjalan tanpa konfigurasi `.env`)_
 
 ---
 
+### 4. Konfigurasi Tambahan (Opsional)
+
+Selain `STOCKFISH_PATH`, Anda juga dapat mengatur konfigurasi berikut di file `.env`:
+
+```env
+# Kedalaman pencarian analisis engine Stockfish (Default: 15)
+STOCKFISH_DEPTH=15
+
+# Lokasi penyimpanan database SQLite (Default: data/games.db di folder project)
+DB_PATH="D:/kuliah/Project-After-Lulus/chess-analyzer/data/games.db"
+```
+
+---
+
+## 🚀 Cara Menjalankan Aplikasi
+
+Setelah semua instalasi dan konfigurasi selesai, jalankan aplikasi web Streamlit dengan perintah berikut:
+
+```bash
+streamlit run app.py
+```
+
+Aplikasi akan berjalan secara lokal dan dapat diakses di browser Anda di alamat `http://localhost:8501`.
+
+---
+
 ## 🗺️ Roadmap Pengembangan Project
 
 Berikut adalah roadmap bertahap pengembangan Chess Analyzer:
