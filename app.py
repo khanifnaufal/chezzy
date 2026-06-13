@@ -4,6 +4,7 @@ import json
 import chess
 import chess.svg
 import streamlit as st
+import plotly.graph_objects as go
 from dotenv import load_dotenv
 
 from db.database import init_db, save_game, get_all_games, get_moves_by_game
@@ -113,6 +114,210 @@ def format_score(score: dict) -> str:
             return "0.00"
         pawn_val = val / 100.0
         return f"+{pawn_val:.2f}" if pawn_val > 0 else f"{pawn_val:.2f}"
+
+
+def convert_score_to_cp(score: dict) -> float:
+    """Converts a score dictionary (cp or mate) to a numerical centipawn value.
+    Mate is represented as a high centipawn value.
+    """
+    if not isinstance(score, dict) or "type" not in score or "value" not in score:
+        return 0.0
+        
+    if score["type"] == "mate":
+        mate_val = score["value"]
+        if mate_val > 0:
+            # White mates in mate_val moves. Faster mate = higher value.
+            return 10000.0 - mate_val * 100.0
+        elif mate_val < 0:
+            # Black mates in abs(mate_val) moves. Faster mate = more negative.
+            return -10000.0 - mate_val * 100.0
+        else:
+            return 0.0
+            
+    return float(score["value"])
+
+
+def calculate_game_stats(results: list) -> dict:
+    """Calculates accuracies, move classifications, and the worst move of the game."""
+    white_losses = []
+    black_losses = []
+    
+    worst_move = None
+    max_loss = -float('inf')
+    
+    white_counts = {"Brilliant": 0, "Good": 0, "Inaccuracy": 0, "Mistake": 0, "Blunder": 0}
+    black_counts = {"Brilliant": 0, "Good": 0, "Inaccuracy": 0, "Mistake": 0, "Blunder": 0}
+    
+    for idx, m in enumerate(results):
+        is_white = (idx % 2 == 0)
+        
+        # Convert scores to centipawns
+        before_cp = convert_score_to_cp(m.get("score_before"))
+        after_cp = convert_score_to_cp(m.get("score_after"))
+        
+        # Centipawn loss (from player's perspective)
+        if is_white:
+            loss = before_cp - after_cp
+        else:
+            loss = after_cp - before_cp
+            
+        # For accuracy, use capped losses at 0
+        capped_loss = max(0.0, loss)
+        
+        if is_white:
+            white_losses.append(capped_loss)
+            lbl = m.get("label", "Good")
+            if lbl in white_counts:
+                white_counts[lbl] += 1
+        else:
+            black_losses.append(capped_loss)
+            lbl = m.get("label", "Good")
+            if lbl in black_counts:
+                black_counts[lbl] += 1
+                
+        # Track worst move (largest raw centipawn loss)
+        if loss > max_loss:
+            max_loss = loss
+            move_num = (idx // 2) + 1
+            player_str = "White" if is_white else "Black"
+            move_label = f"{move_num}. {m['move']}" if is_white else f"{move_num}... {m['move']}"
+            worst_move = {
+                "move": move_label,
+                "player": player_str,
+                "loss": loss
+            }
+            
+    # Calculate accuracies: 100 - average_centipawn_loss
+    # Cap individual losses at 300 to prevent a single blunder from dropping accuracy to 0%
+    def get_accuracy(losses):
+        if not losses:
+            return 100.0
+        capped_losses = [min(300.0, l) for l in losses]
+        avg_loss = sum(capped_losses) / len(capped_losses)
+        return max(0.0, min(100.0, 100.0 - avg_loss))
+        
+    white_acc = get_accuracy(white_losses)
+    black_acc = get_accuracy(black_losses)
+    
+    return {
+        "white_accuracy": white_acc,
+        "black_accuracy": black_acc,
+        "white_counts": white_counts,
+        "black_counts": black_counts,
+        "worst_move": worst_move
+    }
+
+
+def generate_evaluation_chart(results: list) -> go.Figure:
+    """Generates an interactive Plotly evaluation line chart."""
+    x_moves = ["Start"]
+    # Build y evaluations. Start position evaluation:
+    start_score = results[0]["score_before"] if results else {"type": "cp", "value": 0}
+    
+    def get_graph_score(score: dict) -> float:
+        if not score:
+            return 0.0
+        if score.get("type") == "mate":
+            val = score.get("value")
+            if val is None:
+                return 0.0
+            # Represent mate as 10.0 or -10.0 pawns
+            return 10.0 if val > 0 else -10.0
+        else:
+            val = score.get("value")
+            if val is None:
+                return 0.0
+            # Cap centipawn score to [-1000, 1000] and convert to pawns
+            return max(-10.0, min(10.0, float(val) / 100.0))
+            
+    y_evals = [get_graph_score(start_score)]
+    hover_texts = [f"<b>Start Position</b><br>Evaluation: {format_score(start_score)}"]
+    
+    for idx, m in enumerate(results):
+        move_num = (idx // 2) + 1
+        player = "White" if idx % 2 == 0 else "Black"
+        move_label = f"{move_num}. {m['move']}" if idx % 2 == 0 else f"{move_num}... {m['move']}"
+        
+        score_after = m.get("score_after")
+        score_str = format_score(score_after)
+        lbl = m.get("label", "Good")
+        
+        x_moves.append(move_label)
+        y_evals.append(get_graph_score(score_after))
+        hover_texts.append(
+            f"<b>Move: {move_label}</b> ({player})<br>"
+            f"Evaluation: {score_str}<br>"
+            f"Label: {lbl}"
+        )
+        
+    # Determine dynamic Y-axis range (minimum [-2.0, 2.0] pawns)
+    min_val = min(y_evals)
+    max_val = max(y_evals)
+    y_min_margin = min(-2.0, min_val - 0.5)
+    y_max_margin = max(2.0, max_val + 0.5)
+    
+    # Create the Plotly figure
+    fig = go.Figure()
+    
+    # 1. Add bottom baseline trace to fill against (transparent line at y_min_margin)
+    fig.add_trace(go.Scatter(
+        x=x_moves,
+        y=[y_min_margin] * len(y_evals),
+        mode='lines',
+        line=dict(color='rgba(0,0,0,0)'),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # 2. Add main evaluation trace that fills to the baseline trace (tonexty)
+    fig.add_trace(go.Scatter(
+        x=x_moves,
+        y=y_evals,
+        mode='lines+markers',
+        line=dict(color='#9B5DE5', width=3),
+        marker=dict(size=6, color='#9B5DE5', symbol='circle'),
+        fill='tonexty',
+        fillcolor='rgba(21, 25, 34, 0.95)', # Dark/black background for below curve
+        name='Evaluation',
+        hoverinfo='text',
+        hovertext=hover_texts
+    ))
+    
+    # 3. Add horizontal dashed line at Y=0 (equal position)
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        line_color="rgba(128, 128, 128, 0.4)",
+        line_width=1.5
+    )
+    
+    # Update layout to style the chart
+    fig.update_layout(
+        margin=dict(l=40, r=20, t=20, b=40),
+        height=380,
+        hovermode='x unified',
+        plot_bgcolor='rgba(240, 240, 240, 0.95)', # Soft off-white for above curve
+        paper_bgcolor='#0E1117', # Matches streamlit's dark theme
+        xaxis=dict(
+            title="Moves",
+            color="#8C9BB4",
+            gridcolor="rgba(255, 255, 255, 0.05)",
+            showgrid=True,
+            tickangle=-45,
+            tickfont=dict(size=10)
+        ),
+        yaxis=dict(
+            title="Score (Pawns)",
+            color="#8C9BB4",
+            gridcolor="rgba(255, 255, 255, 0.05)",
+            showgrid=True,
+            range=[y_min_margin, y_max_margin]
+        ),
+        showlegend=False
+    )
+    
+    return fig
+
 
 
 def generate_moves_table_html(moves: list, active_index: int) -> str:
@@ -491,3 +696,56 @@ else:
     with col_table:
         table_html = generate_moves_table_html(results, active_idx)
         st.components.v1.html(table_html, height=390)
+
+    # --- Post-Game Summary & Evaluation Graph (Below board and table) ---
+    stats = calculate_game_stats(results)
+    
+    st.markdown("<hr style='border-color: #2B3547; margin: 30px 0;'/>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #FFF; font-weight: 600; margin-bottom: 20px;'>📊 Post-Game Summary</h3>", unsafe_allow_html=True)
+    
+    # Row 1: Key Metrics (Accuracies & Worst Move)
+    col_acc1, col_acc2, col_worst = st.columns([1, 1, 2])
+    with col_acc1:
+        st.metric(label="White Accuracy", value=f"{stats['white_accuracy']:.1f}%")
+    with col_acc2:
+        st.metric(label="Black Accuracy", value=f"{stats['black_accuracy']:.1f}%")
+    with col_worst:
+        w_move = stats.get("worst_move")
+        if w_move:
+            pawn_loss = w_move['loss'] / 100.0
+            if w_move['loss'] >= 9000.0:
+                delta_str = "Mate Blunder"
+            else:
+                delta_str = f"-{pawn_loss:.2f} pawns"
+            st.metric(label=f"Worst Move ({w_move['player']})", value=w_move['move'], delta=delta_str, delta_color="normal")
+        else:
+            st.metric(label="Worst Move", value="None")
+            
+    # Row 2: Detailed Move Classification Counts
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+    col_w, col_b = st.columns(2, gap="large")
+    
+    with col_w:
+        st.markdown(f"<p style='color: #E0E0E0; font-weight: 600; margin-bottom: 12px;'>⚪ {meta['white']} (White) Breakdowns</p>", unsafe_allow_html=True)
+        w_cols = st.columns(5)
+        w_cols[0].metric("Brilliant", stats['white_counts']['Brilliant'])
+        w_cols[1].metric("Good", stats['white_counts']['Good'])
+        w_cols[2].metric("Inaccuracy", stats['white_counts']['Inaccuracy'])
+        w_cols[3].metric("Mistake", stats['white_counts']['Mistake'])
+        w_cols[4].metric("Blunder", stats['white_counts']['Blunder'])
+        
+    with col_b:
+        st.markdown(f"<p style='color: #E0E0E0; font-weight: 600; margin-bottom: 12px;'>⚫ {meta['black']} (Black) Breakdowns</p>", unsafe_allow_html=True)
+        b_cols = st.columns(5)
+        b_cols[0].metric("Brilliant", stats['black_counts']['Brilliant'])
+        b_cols[1].metric("Good", stats['black_counts']['Good'])
+        b_cols[2].metric("Inaccuracy", stats['black_counts']['Inaccuracy'])
+        b_cols[3].metric("Mistake", stats['black_counts']['Mistake'])
+        b_cols[4].metric("Blunder", stats['black_counts']['Blunder'])
+        
+    st.markdown("<hr style='border-color: #2B3547; margin: 30px 0;'/>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #FFF; font-weight: 600; margin-bottom: 15px;'>📈 Position Evaluation Graph</h3>", unsafe_allow_html=True)
+    
+    fig = generate_evaluation_chart(results)
+    st.plotly_chart(fig, use_container_width=True)
+
