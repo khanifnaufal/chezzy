@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from backend.engine.evaluator import get_evaluation, get_top_moves
 from backend.engine.labeler import label_move, get_phase
-from backend.engine.recommender import analyze_move_heuristics, generate_explanation_and_risk
+from backend.engine.recommender import analyze_move_heuristics, generate_explanation_and_risk, recommend_moves
 
 logger = logging.getLogger("chess_analyzer")
 
@@ -20,6 +20,7 @@ router = APIRouter()
 #    high-concurrency environment, these session states should be stored in a shared database or cache
 #    with distributed locks.
 active_games: dict[str, chess.Board] = {}
+active_game_colors: dict[str, str] = {}
 
 def get_move_explanation(label: str, h: dict, explanation: str, risk: str) -> str:
     """
@@ -65,6 +66,26 @@ async def websocket_game(websocket: WebSocket, session_id: str):
         "type": "initial_fen",
         "fen": board.fen()
     })
+
+    # Send initial recommendations if it is player's turn at start of game
+    player_color = active_game_colors.get(session_id, "white")
+    is_white = (board.turn == chess.WHITE)
+    is_player_turn = (player_color == "white" and is_white) or (player_color == "black" and not is_white)
+    if is_player_turn:
+        try:
+            recs = recommend_moves(board.fen(), is_white)
+            await websocket.send_json({
+                "type": "move_result",
+                "san": None,
+                "label": None,
+                "score_before": None,
+                "score_after": None,
+                "explanation": None,
+                "current_fen": board.fen(),
+                "recommendations": recs
+            })
+        except Exception as e:
+            logger.error(f"Error calculating initial recommendations: {e}")
     
     try:
         while True:
@@ -140,8 +161,8 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                     label = label_move(score_before, score_after, is_white, is_unexpected)
                     final_explanation = get_move_explanation(label, h, explanation_raw, risk_raw)
                 
-                # Send the response back to client
-                await websocket.send_json({
+                # Prepare response payload
+                response_payload = {
                     "type": "move_result",
                     "san": san,
                     "label": label,
@@ -149,7 +170,22 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                     "score_after": score_after,
                     "explanation": final_explanation,
                     "current_fen": board.fen()
-                })
+                }
+
+                # Add recommendations if next turn belongs to player
+                player_color = active_game_colors.get(session_id, "white")
+                next_is_white = (board.turn == chess.WHITE)
+                is_next_player_turn = (player_color == "white" and next_is_white) or (player_color == "black" and not next_is_white)
+                if is_next_player_turn:
+                    try:
+                        recs = recommend_moves(board.fen(), next_is_white)
+                        response_payload["recommendations"] = recs
+                    except Exception as e:
+                        logger.error(f"Error calculating recommendations: {e}")
+                        response_payload["recommendations"] = []
+
+                # Send the response back to client
+                await websocket.send_json(response_payload)
                 
     except WebSocketDisconnect:
         logger.info(f"Client disconnected from WS game session: {session_id}")

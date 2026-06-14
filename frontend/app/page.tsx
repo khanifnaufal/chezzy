@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Board, { BoardRef } from '../components/Board';
 import EvalBar from '../components/EvalBar';
 import MoveList, { Move } from '../components/MoveList';
-import { getRecommendations, startGame, sendMove } from '../lib/api';
+import RecommendPanel from '../components/RecommendPanel';
+import { startGame, sendMove } from '../lib/api';
 import { Recommendation, Game } from '../lib/types';
 import { Chess } from 'chess.js';
 
@@ -30,8 +31,11 @@ function ChessAnalyzerApp() {
   const [currentFen, setCurrentFen] = useState('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const [moves, setMoves] = useState<Move[]>([]);
   
-  // Hovered recommendation state for board highlights
-  const [hoveredMoveUci, setHoveredMoveUci] = useState<string | null>(null);
+  // Recommendations state
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [isRecommendLoading, setIsRecommendLoading] = useState<boolean>(false);
+  const [highlightSquares, setHighlightSquares] = useState<string[]>([]);
+  const recommendationsFenRef = useRef<string | null>(null);
   
   // Game instance for status check (check, checkmate, draw, turn)
   const [localGame, setLocalGame] = useState(() => new Chess());
@@ -39,7 +43,7 @@ function ChessAnalyzerApp() {
   // Keep localGame in sync with current FEN
   useEffect(() => {
     try {
-      localGame.load(currentFen);
+      setLocalGame(new Chess(currentFen));
     } catch (e) {
       console.error('Failed to sync local game FEN:', e);
     }
@@ -69,16 +73,32 @@ function ChessAnalyzerApp() {
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [currentFen, playerColor, activeGame, gameMode]);
+  }, [currentFen, playerColor, activeGame, gameMode, localGame]);
 
-  // Fetch recommendations from Stockfish backend when currentFen changes
-  const { data: recommendations = [], isLoading, isError } = useQuery<Recommendation[]>({
-    queryKey: ['recommendations', currentFen],
-    queryFn: () => getRecommendations(currentFen),
-    enabled: !!activeGame,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  });
+  // Monitor currentFen to manage loading state and board highlights
+  useEffect(() => {
+    if (!activeGame) return;
+    
+    try {
+      const tempChess = new Chess(currentFen);
+      const nextTurn = tempChess.turn() === 'w' ? 'white' : 'black';
+      const isNextPlayerTurn = nextTurn === playerColor;
+      
+      if (isNextPlayerTurn) {
+        if (recommendationsFenRef.current !== currentFen) {
+          setIsRecommendLoading(true);
+          setHighlightSquares([]);
+          setRecommendations([]);
+        }
+      } else {
+        setIsRecommendLoading(false);
+        setRecommendations([]);
+        setHighlightSquares([]);
+      }
+    } catch (e) {
+      console.error('Error in FEN monitoring effect:', e);
+    }
+  }, [currentFen, playerColor, activeGame]);
 
   const handleStartNewGame = async (color: 'white' | 'black') => {
     try {
@@ -91,6 +111,10 @@ function ChessAnalyzerApp() {
       setLocalGame(new Chess());
       setLastMoveEvaluation(null);
       setCurrentScore(0);
+      setRecommendations([]);
+      setHighlightSquares([]);
+      setIsRecommendLoading(color === 'white');
+      recommendationsFenRef.current = null;
     } catch (error) {
       console.error('Failed to start game:', error);
       // Optionally show an error message to the user
@@ -99,71 +123,58 @@ function ChessAnalyzerApp() {
   };
 
   const handleMoveResult = (result: {
-    san: string;
-    label: string;
-    score_before: number;
-    score_after: number;
-    explanation: string;
+    san: string | null;
+    label: string | null;
+    score_before: number | null;
+    score_after: number | null;
+    explanation: string | null;
     current_fen: string;
+    recommendations?: Recommendation[];
   }) => {
     setCurrentFen(result.current_fen);
-    setLastMoveEvaluation({
-      san: result.san,
-      label: result.label,
-      explanation: result.explanation,
-    });
-    setHoveredMoveUci(null);
-    setCurrentScore(result.score_after);
+    if (result.score_after !== null && result.score_after !== undefined) {
+      setCurrentScore(result.score_after);
+    }
 
-    setMoves((prev) => {
-      const nextMoveIndex = prev.length;
-      const isWhite = nextMoveIndex % 2 === 0;
-      const moveNumber = Math.floor(nextMoveIndex / 2) + 1;
-      
-      const newMove: Move = {
-        moveNumber,
+    if (result.recommendations !== undefined) {
+      setRecommendations(result.recommendations);
+      setIsRecommendLoading(false);
+      recommendationsFenRef.current = result.current_fen;
+    }
+
+    if (result.san) {
+      setLastMoveEvaluation({
         san: result.san,
-        label: result.label,
-        explanation: result.explanation,
-        isWhite,
-      };
-      
-      return [...prev, newMove];
-    });
-  };
+        label: result.label || '',
+        explanation: result.explanation || '',
+      });
 
-  const playRecommendedMove = (uci: string) => {
-    if (!activeGame || localGame.isGameOver()) return;
-
-    // Check if it's the correct color turn (only check in bot mode)
-    const turnColor = localGame.turn() === 'w' ? 'white' : 'black';
-    if (gameMode === 'bot' && turnColor !== playerColor) {
-      return; // Not your turn
-    }
-
-    const from = uci.slice(0, 2);
-    const to = uci.slice(2, 4);
-    const promotion = uci.length > 4 ? uci[4] : undefined;
-
-    if (boardRef.current) {
-      boardRef.current.sendMove({ from, to, promotion, uci });
+      setMoves((prev) => {
+        const nextMoveIndex = prev.length;
+        const isWhite = nextMoveIndex % 2 === 0;
+        const moveNumber = Math.floor(nextMoveIndex / 2) + 1;
+        
+        const newMove: Move = {
+          moveNumber,
+          san: result.san!,
+          label: result.label || '',
+          explanation: result.explanation || '',
+          isWhite,
+        };
+        
+        return [...prev, newMove];
+      });
     }
   };
 
-  // Build highlight styles for hovered recommendation move
-  const recommendationHighlights: Record<string, React.CSSProperties> = {};
-  if (hoveredMoveUci) {
-    const from = hoveredMoveUci.slice(0, 2);
-    const to = hoveredMoveUci.slice(2, 4);
-    recommendationHighlights[from] = {
-      backgroundColor: 'rgba(59, 130, 246, 0.4)', // Soft blue
-      border: '2px solid rgba(59, 130, 246, 0.8)',
-    };
-    recommendationHighlights[to] = {
-      backgroundColor: 'rgba(59, 130, 246, 0.6)', // Slightly stronger blue
-      border: '2px solid rgba(59, 130, 246, 0.8)',
-    };
-  }
+  const handleHighlight = (uci: string | null) => {
+    if (!uci) {
+      setHighlightSquares([]);
+    } else {
+      const dest = uci.slice(2, 4);
+      setHighlightSquares([dest]);
+    }
+  };
 
   // Get status label
   const getGameStatusLabel = () => {
@@ -173,7 +184,7 @@ function ChessAnalyzerApp() {
     return localGame.turn() === 'w' ? "White's Turn" : "Black's Turn";
   };
 
-  const isPlayerTurn = activeGame && (localGame.turn() === playerColor[0]);
+  const isPlayerTurn = activeGame ? (localGame.turn() === playerColor[0]) : false;
 
   // Active Board Workspace Layout: 3 Columns
   // Column 1: EvalBar
@@ -253,7 +264,8 @@ function ChessAnalyzerApp() {
                     playerColor={playerColor}
                     sessionId={activeGame?.id}
                     onMoveResult={handleMoveResult}
-                    highlightSquares={recommendationHighlights}
+                    highlightSquares={highlightSquares}
+                    gameMode={gameMode}
                     ref={boardRef}
                   />
                 </div>
@@ -334,97 +346,12 @@ function ChessAnalyzerApp() {
               <MoveList moves={moves} />
 
               {/* Recommendation Panel */}
-              <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl flex-1 min-h-[300px]">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-3">
-                  Rekomendasi Stockfish
-                </h3>
-
-                {isLoading ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-12 gap-3 text-slate-400 text-sm">
-                    <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-                    <span>Menganalisis posisi catur...</span>
-                  </div>
-                ) : isError ? (
-                  <div className="flex-1 flex items-center justify-center text-rose-400 text-xs py-8 text-center bg-rose-500/5 rounded-xl border border-rose-500/10">
-                    Gagal mengambil rekomendasi. Pastikan backend Stockfish aktif di port 8000.
-                  </div>
-                ) : recommendations.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-12 text-center">
-                    Tidak ada rekomendasi untuk posisi ini. Silakan jalankan langkah baru.
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin">
-                    {recommendations.map((rec) => {
-                      // Determine theme colors based on recommendation type
-                      let typeBadgeBg = 'bg-slate-800 text-slate-400 border-slate-700';
-                      let cardBorder = 'hover:border-slate-700';
-                      if (rec.type === 'Taktik') {
-                        typeBadgeBg = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-                        cardBorder = 'hover:border-rose-500/30';
-                      } else if (rec.type === 'Defensive') {
-                        typeBadgeBg = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-                        cardBorder = 'hover:border-blue-500/30';
-                      } else if (rec.type === 'Endgame') {
-                        typeBadgeBg = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-                        cardBorder = 'hover:border-purple-500/30';
-                      } else if (rec.type === 'Posisional') {
-                        typeBadgeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                        cardBorder = 'hover:border-emerald-500/30';
-                      }
-
-                      const scoreDisplay = rec.score !== null 
-                        ? (rec.score > 0 ? `+${(rec.score / 100).toFixed(2)}` : (rec.score / 100).toFixed(2)) 
-                        : null;
-                      
-                      const mateDisplay = rec.mate_in !== null ? `#M${Math.abs(rec.mate_in)}` : null;
-
-                      return (
-                        <div
-                          key={rec.move_uci}
-                          onMouseEnter={() => setHoveredMoveUci(rec.move_uci)}
-                          onMouseLeave={() => setHoveredMoveUci(null)}
-                          onClick={() => playRecommendedMove(rec.move_uci)}
-                          className={`group p-4 bg-slate-950/50 rounded-xl border border-slate-800/80 transition cursor-pointer flex flex-col gap-2 relative overflow-hidden ${cardBorder} hover:bg-slate-900/30`}
-                        >
-                          {/* Top row */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-base font-bold text-indigo-400 group-hover:text-indigo-300">
-                                {rec.move_san}
-                              </span>
-                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${typeBadgeBg}`}>
-                                {rec.type}
-                              </span>
-                              {rec.is_best && (
-                                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                                  Terbaik ★
-                                </span>
-                              )}
-                            </div>
-                            
-                            <div className="text-xs font-mono font-semibold text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">
-                              {scoreDisplay || mateDisplay}
-                            </div>
-                          </div>
-
-                          {/* Explanation */}
-                          <p className="text-slate-300 text-xs leading-relaxed">
-                            {rec.explanation}
-                          </p>
-
-                          {/* Risk */}
-                          {rec.risk && (
-                            <p className="text-[11px] text-slate-400 italic">
-                              <span className="text-amber-500/80 not-italic font-semibold pr-1">Risiko:</span>
-                              {rec.risk}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <RecommendPanel
+                recommendations={recommendations}
+                onHighlight={handleHighlight}
+                isMyTurn={isPlayerTurn}
+                isLoading={isRecommendLoading}
+              />
             </div>
           </div>
         )}

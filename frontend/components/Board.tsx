@@ -14,17 +14,19 @@ interface BoardProps {
   playerColor: 'white' | 'black';
   sessionId?: string;
   onMoveResult?: (result: {
-    san: string;
-    label: string;
-    score_before: number;
-    score_after: number;
-    explanation: string;
+    san: string | null;
+    label: string | null;
+    score_before: number | null;
+    score_after: number | null;
+    explanation: string | null;
     current_fen: string;
+    recommendations?: any[];
   }) => void;
-  highlightSquares?: Record<string, React.CSSProperties> | string[];
+  highlightSquares?: string[];
+  gameMode?: 'bot' | 'analysis';
 }
 
-const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares }, ref) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot' }, ref) => {
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -200,14 +202,22 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
   };
 
   const isDraggablePiece = ({ piece }: { piece: string }): boolean => {
-    // Enforce that only the current player's pieces can be dragged on their turn
-    const isCorrectColor =
-      (playerColor === 'white' && piece.startsWith('w')) ||
-      (playerColor === 'black' && piece.startsWith('b'));
-    
-    const isMyTurn = game.turn() === playerColor[0];
-    
-    return isCorrectColor && isMyTurn && !game.isGameOver();
+    if (game.isGameOver()) return false;
+
+    if (gameMode === 'analysis') {
+      // In analysis mode, allow moving the piece matching the current turn's color
+      const currentTurnPiecePrefix = game.turn(); // 'w' or 'b'
+      return piece.startsWith(currentTurnPiecePrefix);
+    } else {
+      // In bot mode, only allow the player to drag their own pieces on their turn
+      const isCorrectColor =
+        (playerColor === 'white' && piece.startsWith('w')) ||
+        (playerColor === 'black' && piece.startsWith('b'));
+      
+      const isMyTurn = game.turn() === playerColor[0];
+      
+      return isCorrectColor && isMyTurn;
+    }
   };
 
   // Determine last move squares to highlight (yellow)
@@ -221,19 +231,15 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     };
   }
 
-  // Parse custom highlightSquares prop (supports array or style object)
+  // Parse custom highlightSquares prop (supports array of square names)
   let propStyles: Record<string, React.CSSProperties> = {};
-  if (highlightSquares) {
-    if (Array.isArray(highlightSquares)) {
-      highlightSquares.forEach((sq) => {
-        propStyles[sq] = {
-          background: 'radial-gradient(circle, rgba(59, 130, 246, 0.6) 20%, transparent 25%)', // Blue indicator dot
-          borderRadius: '50%',
-        };
-      });
-    } else if (typeof highlightSquares === 'object') {
-      propStyles = highlightSquares as Record<string, React.CSSProperties>;
-    }
+  if (highlightSquares && Array.isArray(highlightSquares)) {
+    highlightSquares.forEach((sq) => {
+      propStyles[sq] = {
+        backgroundColor: 'rgba(34, 197, 94, 0.35)', // transparent green
+        border: '2.5px solid rgba(34, 197, 94, 0.85)',
+      };
+    });
   }
 
   // Combine styles

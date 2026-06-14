@@ -152,6 +152,7 @@ def start_game(request: StartGameRequest):
     """
     session_id = str(uuid.uuid4())
     ws.active_games[session_id] = chess.Board()
+    ws.active_game_colors[session_id] = request.playerColor
     
     return {
         "session_id": session_id,
