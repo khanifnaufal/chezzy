@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import Board, { BoardRef } from '../components/Board';
 import EvalBar from '../components/EvalBar';
+import MoveList, { Move } from '../components/MoveList';
 import { getRecommendations, startGame, sendMove } from '../lib/api';
 import { Recommendation, Game } from '../lib/types';
 import { Chess } from 'chess.js';
@@ -27,7 +28,7 @@ function ChessAnalyzerApp() {
   
   // Core state for board synced from Board.tsx
   const [currentFen, setCurrentFen] = useState('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-  const [moveHistory, setMoveHistory] = useState<string[]>([]);
+  const [moves, setMoves] = useState<Move[]>([]);
   
   // Hovered recommendation state for board highlights
   const [hoveredMoveUci, setHoveredMoveUci] = useState<string | null>(null);
@@ -86,7 +87,7 @@ function ChessAnalyzerApp() {
       setActiveGame(gameData);
       setPlayerColor(color);
       setCurrentFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-      setMoveHistory([]);
+      setMoves([]);
       setLocalGame(new Chess());
       setLastMoveEvaluation(null);
       setCurrentScore(0);
@@ -106,7 +107,6 @@ function ChessAnalyzerApp() {
     current_fen: string;
   }) => {
     setCurrentFen(result.current_fen);
-    setMoveHistory((prev) => [...prev, result.san]);
     setLastMoveEvaluation({
       san: result.san,
       label: result.label,
@@ -114,6 +114,22 @@ function ChessAnalyzerApp() {
     });
     setHoveredMoveUci(null);
     setCurrentScore(result.score_after);
+
+    setMoves((prev) => {
+      const nextMoveIndex = prev.length;
+      const isWhite = nextMoveIndex % 2 === 0;
+      const moveNumber = Math.floor(nextMoveIndex / 2) + 1;
+      
+      const newMove: Move = {
+        moveNumber,
+        san: result.san,
+        label: result.label,
+        explanation: result.explanation,
+        isWhite,
+      };
+      
+      return [...prev, newMove];
+    });
   };
 
   const playRecommendedMove = (uci: string) => {
@@ -159,34 +175,10 @@ function ChessAnalyzerApp() {
 
   const isPlayerTurn = activeGame && (localGame.turn() === playerColor[0]);
 
-  // Group moves into pairs (White & Black) for notation display
-  const renderMoveHistoryPairs = () => {
-    const pairs = [];
-    for (let i = 0; i < moveHistory.length; i += 2) {
-      pairs.push({
-        num: Math.floor(i / 2) + 1,
-        white: moveHistory[i],
-        black: moveHistory[i + 1] || '',
-      });
-    }
-
-    if (pairs.length === 0) {
-      return <div className="text-slate-500 text-sm text-center py-4">Belum ada langkah dimainkan.</div>;
-    }
-
-    return (
-      <div className="grid grid-cols-3 gap-2 max-h-[180px] overflow-y-auto pr-1 text-sm font-mono scrollbar-thin">
-        {pairs.map((p) => (
-          <React.Fragment key={p.num}>
-            <div className="text-slate-500 font-semibold">{p.num}.</div>
-            <div className="text-slate-200">{p.white}</div>
-            <div className="text-slate-400">{p.black}</div>
-          </React.Fragment>
-        ))}
-      </div>
-    );
-  };
-
+  // Active Board Workspace Layout: 3 Columns
+  // Column 1: EvalBar
+  // Column 2: Board (with Opponent and Player cards)
+  // Column 3: MoveList & Sidebar panels
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center">
       {/* Navbar / Header */}
@@ -232,12 +224,13 @@ function ChessAnalyzerApp() {
             </button>
           </div>
         ) : (
-          /* Active Board Workspace */
-          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-             {/* Left: Chessboard Column */}
-            <div className="lg:col-span-7 flex flex-col items-center gap-4">
+          /* Active Board Workspace (Responsive 3-Column Layout) */
+          <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
+            
+            {/* Column 1 & 2: Chessboard and EvalBar Column */}
+            <div className="flex flex-col items-center gap-4 w-full max-w-[540px]">
               {/* Opponent Card */}
-              <div className="w-full max-w-[540px] bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
+              <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${playerColor === 'white' ? 'bg-slate-500 border border-slate-400' : 'bg-slate-200 shadow'}`} />
                   <span className="font-semibold text-sm text-slate-200">
@@ -251,10 +244,10 @@ function ChessAnalyzerApp() {
                 )}
               </div>
 
-              {/* EvalBar + Board Row */}
-              <div className="w-full max-w-[540px] flex items-stretch gap-3">
+              {/* Board Area with EvalBar (visible next to Board, stretched to match its height) */}
+              <div className="w-full flex items-stretch gap-3">
                 <EvalBar score={currentScore} />
-                <div className="flex-1 min-w-0 aspect-square max-w-[500px]">
+                <div className="flex-1 min-w-0 aspect-square">
                   <Board
                     position={currentFen}
                     playerColor={playerColor}
@@ -267,7 +260,7 @@ function ChessAnalyzerApp() {
               </div>
 
               {/* Player Card */}
-              <div className="w-full max-w-[540px] bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
+              <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${playerColor === 'white' ? 'bg-slate-200 shadow' : 'bg-slate-500 border border-slate-400'}`} />
                   <span className="font-semibold text-sm text-slate-200">You</span>
@@ -278,11 +271,11 @@ function ChessAnalyzerApp() {
                   </span>
                 )}
               </div>
-
             </div>
 
-            {/* Right: Sidebar Analysis Column */}
-            <div className="lg:col-span-5 flex flex-col gap-6 w-full">
+            {/* Column 3: Sidebar Analysis & MoveList Column */}
+            <div className="flex-1 w-full lg:max-w-[450px] flex flex-col gap-6">
+              
               {/* Game Status & Controls Panel */}
               <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -335,12 +328,10 @@ function ChessAnalyzerApp() {
                     </p>
                   </div>
                 )}
-
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Riwayat Langkah</h3>
-                  {renderMoveHistoryPairs()}
-                </div>
               </div>
+
+              {/* MoveList Panel (New component) */}
+              <MoveList moves={moves} />
 
               {/* Recommendation Panel */}
               <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl flex-1 min-h-[300px]">
