@@ -2,6 +2,7 @@ import chess
 import logging
 import asyncio
 import uuid
+from typing import Literal
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
@@ -141,7 +142,7 @@ def get_recommendations(
 app.include_router(ws.router)
 
 class StartGameRequest(BaseModel):
-    playerColor: str = "white"
+    playerColor: Literal["white", "black"] = "white"
 
 @app.post("/api/game/start")
 def start_game(request: StartGameRequest):

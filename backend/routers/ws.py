@@ -9,7 +9,16 @@ logger = logging.getLogger("chess_analyzer")
 
 router = APIRouter()
 
-# Global dictionary to store active games. Key: session_id, Value: chess.Board
+# CONCURRENCY & MEMORY LIMITATIONS:
+# 1. This application is designed for single-user interactive analysis. Only one WebSocket connection
+#    per `session_id` is supported at any given time.
+# 2. Access to active games is not synchronized across multiple concurrent connection handlers for the
+#    same session ID. If multiple clients connect to the same session and send moves simultaneously,
+#    race conditions on the underlying `chess.Board` state can occur.
+# 3. Active game boards are kept in this dictionary in-memory to support transient client reconnections
+#    (e.g., during browser refresh) without losing game history. In a production clustering or
+#    high-concurrency environment, these session states should be stored in a shared database or cache
+#    with distributed locks.
 active_games: dict[str, chess.Board] = {}
 
 def get_move_explanation(label: str, h: dict, explanation: str, risk: str) -> str:
@@ -43,9 +52,11 @@ async def websocket_game(websocket: WebSocket, session_id: str):
     await websocket.accept()
     logger.info(f"Client connected to WS game session: {session_id}")
     
-    # Retrieve or create chess board for session_id
+    # Validate that the session was created through /api/game/start
     if session_id not in active_games:
-        active_games[session_id] = chess.Board()
+        logger.warning(f"Rejected WS connection: session {session_id} does not exist.")
+        await websocket.close(code=4003)
+        return
         
     board = active_games[session_id]
     
@@ -60,7 +71,6 @@ async def websocket_game(websocket: WebSocket, session_id: str):
             data = await websocket.receive_json()
             if data.get("type") == "move":
                 uci = data.get("uci")
-                is_white = data.get("is_white", True)
                 
                 if not uci:
                     await websocket.send_json({
@@ -85,12 +95,15 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                     })
                     continue
                 
+                # Derive authoritative is_white from board state before the move is applied
+                is_white = (board.turn == chess.WHITE)
+
                 # Analyze state BEFORE the move is applied
+                score_before = None
                 try:
                     score_before = get_evaluation(board.fen())
                 except Exception as e:
                     logger.error(f"Error evaluating position before move: {e}")
-                    score_before = 0
                 
                 # Check if the move is unexpected (not the engine's top choice)
                 is_unexpected = False
@@ -113,17 +126,19 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                 board.push(move)
                 
                 # Analyze state AFTER the move is applied
+                score_after = None
                 try:
                     score_after = get_evaluation(board.fen())
                 except Exception as e:
                     logger.error(f"Error evaluating position after move: {e}")
-                    score_after = 0
                 
-                # Generate final move label
-                label = label_move(score_before, score_after, is_white, is_unexpected)
-                
-                # Refine explanation based on move quality label
-                final_explanation = get_move_explanation(label, h, explanation_raw, risk_raw)
+                # Generate final move label and explanation, handling engine failure gracefully
+                if score_before is None or score_after is None:
+                    label = "Unknown"
+                    final_explanation = "Gagal mengevaluasi langkah karena masalah pada engine catur."
+                else:
+                    label = label_move(score_before, score_after, is_white, is_unexpected)
+                    final_explanation = get_move_explanation(label, h, explanation_raw, risk_raw)
                 
                 # Send the response back to client
                 await websocket.send_json({

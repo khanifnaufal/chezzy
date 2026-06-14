@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
+import { WS_URL } from '../lib/api';
 
 export interface BoardRef {
   sendMove: (move: { from: string; to: string; promotion?: string; uci?: string }) => void;
@@ -65,11 +66,26 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     setLastMove(null);
   }, [playerColor]);
 
+  // Keep the latest position in a ref so the WebSocket event listeners can access it
+  // without re-triggering the connection effect.
+  const positionRef = useRef(position);
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+
   // Establish WebSocket connection
   useEffect(() => {
     if (!sessionId) return;
 
-    const wsUrl = `ws://localhost:8000/ws/game/${sessionId}`;
+    // Dynamically derive WS URL based on API config (avoid hardcoding port 8000)
+    let parsedWsUrl = WS_URL;
+    if (parsedWsUrl.startsWith('http://')) {
+      parsedWsUrl = parsedWsUrl.replace('http://', 'ws://');
+    } else if (parsedWsUrl.startsWith('https://')) {
+      parsedWsUrl = parsedWsUrl.replace('https://', 'wss://');
+    }
+    const wsUrl = `${parsedWsUrl}/ws/game/${sessionId}`;
+    
     console.log(`Connecting to WebSocket: ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -99,10 +115,10 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
           }
         } else if (data.type === 'error') {
           console.error('WebSocket game error:', data.message);
-          // Revert local state to parent's position on error
-          const resetGame = new Chess(position);
+          // Revert local state to parent's position on error using positionRef
+          const resetGame = new Chess(positionRef.current);
           setGame(resetGame);
-          setCurrentFen(position);
+          setCurrentFen(positionRef.current);
         }
       } catch (e) {
         console.error('Error handling WS message:', e);
@@ -121,7 +137,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
       ws.close();
       wsRef.current = null;
     };
-  }, [sessionId, position]);
+  }, [sessionId]);
 
   // Send a move through WebSocket
   const sendMoveViaWS = (move: { from: string; to: string; promotion?: string; uci?: string }) => {
