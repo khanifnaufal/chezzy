@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import Board, { BoardRef } from '../components/Board';
+import EvalBar from '../components/EvalBar';
 import { getRecommendations, startGame, sendMove } from '../lib/api';
 import { Recommendation, Game } from '../lib/types';
 import { Chess } from 'chess.js';
@@ -12,6 +13,7 @@ const queryClient = new QueryClient();
 function ChessAnalyzerApp() {
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white');
+  const [currentScore, setCurrentScore] = useState<number>(0);
   const [showColorModal, setShowColorModal] = useState(false);
   const boardRef = useRef<BoardRef>(null);
   const [lastMoveEvaluation, setLastMoveEvaluation] = useState<{
@@ -87,6 +89,7 @@ function ChessAnalyzerApp() {
       setMoveHistory([]);
       setLocalGame(new Chess());
       setLastMoveEvaluation(null);
+      setCurrentScore(0);
     } catch (error) {
       console.error('Failed to start game:', error);
       // Optionally show an error message to the user
@@ -110,6 +113,7 @@ function ChessAnalyzerApp() {
       explanation: result.explanation,
     });
     setHoveredMoveUci(null);
+    setCurrentScore(result.score_after);
   };
 
   const playRecommendedMove = (uci: string) => {
@@ -230,10 +234,10 @@ function ChessAnalyzerApp() {
         ) : (
           /* Active Board Workspace */
           <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left: Chessboard Column */}
+             {/* Left: Chessboard Column */}
             <div className="lg:col-span-7 flex flex-col items-center gap-4">
               {/* Opponent Card */}
-              <div className="w-full max-w-[500px] bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
+              <div className="w-full max-w-[540px] bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${playerColor === 'white' ? 'bg-slate-500 border border-slate-400' : 'bg-slate-200 shadow'}`} />
                   <span className="font-semibold text-sm text-slate-200">
@@ -247,18 +251,23 @@ function ChessAnalyzerApp() {
                 )}
               </div>
 
-              {/* Chessboard */}
-              <Board
-                position={currentFen}
-                playerColor={playerColor}
-                sessionId={activeGame?.id}
-                onMoveResult={handleMoveResult}
-                highlightSquares={recommendationHighlights}
-                ref={boardRef}
-              />
+              {/* EvalBar + Board Row */}
+              <div className="w-full max-w-[540px] flex items-stretch gap-3">
+                <EvalBar score={currentScore} />
+                <div className="flex-1 min-w-0 aspect-square max-w-[500px]">
+                  <Board
+                    position={currentFen}
+                    playerColor={playerColor}
+                    sessionId={activeGame?.id}
+                    onMoveResult={handleMoveResult}
+                    highlightSquares={recommendationHighlights}
+                    ref={boardRef}
+                  />
+                </div>
+              </div>
 
               {/* Player Card */}
-              <div className="w-full max-w-[500px] bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
+              <div className="w-full max-w-[540px] bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${playerColor === 'white' ? 'bg-slate-200 shadow' : 'bg-slate-500 border border-slate-400'}`} />
                   <span className="font-semibold text-sm text-slate-200">You</span>
