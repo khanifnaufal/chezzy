@@ -34,7 +34,7 @@ function ChessAnalyzerApp() {
     } catch (e) {
       console.error('Failed to sync local game FEN:', e);
     }
-  }, [currentFen, localGame]);
+  }, [currentFen]);
 
   // Handle local bot move response when it's the bot's turn
   useEffect(() => {
@@ -68,7 +68,7 @@ function ChessAnalyzerApp() {
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [currentFen, playerColor, activeGame, gameMode, localGame]);
+  }, [currentFen, playerColor, activeGame, gameMode]);
 
   // Fetch recommendations from Stockfish backend when currentFen changes
   const { data: recommendations = [], isLoading, isError } = useQuery<Recommendation[]>({
@@ -80,13 +80,19 @@ function ChessAnalyzerApp() {
   });
 
   const handleStartNewGame = async (color: 'white' | 'black') => {
-    setShowColorModal(false);
-    const gameData = await startGame(color);
-    setActiveGame(gameData);
-    setPlayerColor(color);
-    setCurrentFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    setMoveHistory([]);
-    setLocalGame(new Chess());
+    try {
+      const gameData = await startGame(color);
+      setShowColorModal(false);
+      setActiveGame(gameData);
+      setPlayerColor(color);
+      setCurrentFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      setMoveHistory([]);
+      setLocalGame(new Chess());
+    } catch (error) {
+      console.error('Failed to start game:', error);
+      // Optionally show an error message to the user
+      alert('Gagal memulai permainan. Pastikan backend aktif.');
+    }
   };
 
   const handleMovePlayed = (move: { from: string; to: string; promotion?: string; san?: string; uci?: string }) => {

@@ -27,7 +27,7 @@ export default function Board({ position, playerColor, onMove, highlightSquares 
         console.error('Failed to sync board game with parent position FEN:', e);
       }
     }
-  }, [position, game]);
+  }, [position]);
 
   // Reset/re-initialize board when playerColor changes
   useEffect(() => {
