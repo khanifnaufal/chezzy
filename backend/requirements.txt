@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-chess
+stockfish
+sqlalchemy
+asyncpg
+psycopg2-binary
+python-dotenv

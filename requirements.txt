@@ -1,3 +1,0 @@
-chess
-streamlit
-python-dotenv
