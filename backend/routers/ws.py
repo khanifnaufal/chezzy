@@ -59,6 +59,11 @@ async def websocket_game(websocket: WebSocket, session_id: str):
         await websocket.close(code=4003)
         return
         
+    if session_id not in active_game_colors:
+        logger.warning(f"Rejected WS connection: session {session_id} has no registered player color.")
+        await websocket.close(code=4003)
+        return
+        
     board = active_games[session_id]
     
     # Send initial FEN on connection
@@ -68,7 +73,9 @@ async def websocket_game(websocket: WebSocket, session_id: str):
     })
 
     # Send initial recommendations if it is player's turn at start of game
-    player_color = active_game_colors.get(session_id, "white")
+    if session_id not in active_game_colors:
+        raise KeyError(f"Session {session_id} color metadata missing.")
+    player_color = active_game_colors[session_id]
     is_white = (board.turn == chess.WHITE)
     is_player_turn = (player_color == "white" and is_white) or (player_color == "black" and not is_white)
     if is_player_turn:
@@ -173,7 +180,9 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                 }
 
                 # Add recommendations if next turn belongs to player
-                player_color = active_game_colors.get(session_id, "white")
+                if session_id not in active_game_colors:
+                    raise KeyError(f"Session {session_id} color metadata missing.")
+                player_color = active_game_colors[session_id]
                 next_is_white = (board.turn == chess.WHITE)
                 is_next_player_turn = (player_color == "white" and next_is_white) or (player_color == "black" and not next_is_white)
                 if is_next_player_turn:
