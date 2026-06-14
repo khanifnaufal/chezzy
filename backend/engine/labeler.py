@@ -21,6 +21,10 @@ def label_move(score_before: int, score_after: int, is_white: bool, is_unexpecte
     if gain > 50 and is_unexpected:
         return "Brilliant"
     
+    # Excellent: selisih positif > 50cp tetapi bukan langkah tidak terduga
+    if gain > 50:
+        return "Excellent"
+    
     # Blunder: kerugian > 300cp
     if loss > 300:
         return "Blunder"

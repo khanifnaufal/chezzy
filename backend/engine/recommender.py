@@ -12,11 +12,12 @@ PIECE_NAMES = {
     chess.KING: "raja"
 }
 
-def analyze_move_heuristics(board: chess.Board, move: chess.Move, is_white: bool, phase: str) -> dict:
+def analyze_move_heuristics(board: chess.Board, move: chess.Move, phase: str) -> dict:
     """
     Menganalisis langkah catur menggunakan python-chess untuk mengekstrak data heuristik.
     """
     is_capture = board.is_capture(move)
+    is_white = board.turn == chess.WHITE
     
     # Cek skak dengan menyimulasikan push langkah tersebut
     board.push(move)
@@ -147,7 +148,7 @@ def recommend_moves(fen: str, is_white: bool) -> list:
         move = chess.Move.from_uci(move_uci)
         
         # Menganalisis heuristik langkah
-        h = analyze_move_heuristics(board, move, is_white, phase)
+        h = analyze_move_heuristics(board, move, phase)
         
         # Generate penjelasan dan risiko dalam bahasa Indonesia
         explanation, risk = generate_explanation_and_risk(h)

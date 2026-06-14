@@ -1,8 +1,15 @@
 import chess
-from fastapi import FastAPI, Query, HTTPException
+import logging
+import asyncio
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 from backend.engine.evaluator import get_evaluation, get_top_moves
 from backend.engine.recommender import recommend_moves
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("chess_analyzer")
 
 app = FastAPI(
     title="Chess Analyzer API",
@@ -10,14 +17,29 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Menambahkan CORS Middleware agar bisa diakses oleh Next.js frontend nantinya
+# Menambahkan CORS Middleware agar bisa diakses oleh Next.js frontend nantinya.
+# Karena menggunakan allow_credentials=True, origins TIDAK BOLEH bernilai ["*"].
+# Kami menggunakan origin spesifik "http://localhost:3000" untuk masa development.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware untuk menangani request-level timeout (mencegah thread starvation jika ada proses hang)
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    try:
+        # Enforce a 15-second request timeout limit
+        return await asyncio.wait_for(call_next(request), timeout=15.0)
+    except asyncio.TimeoutError:
+        logger.error(f"Request timeout occurred for endpoint: {request.url.path}")
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Batas waktu permintaan terlampaui. Server membutuhkan waktu terlalu lama untuk merespons."}
+        )
 
 @app.get("/")
 def read_root():
@@ -45,25 +67,27 @@ def test_engine(
         )
 
     try:
-        # Mendapatkan evaluasi saat ini (centipawns)
-        evaluation = get_evaluation(fen)
+        # Mendapatkan evaluasi saat ini dengan timeout pencarian 10 detik
+        evaluation = get_evaluation(fen, timeout=10.0)
         
-        # Mendapatkan top 3 move menggunakan evaluator
-        top_moves = get_top_moves(fen, n=3)
+        # Mendapatkan top 3 move menggunakan evaluator dengan timeout pencarian 10 detik
+        top_moves = get_top_moves(fen, n=3, timeout=10.0)
         
         return {
             "evaluation": evaluation,
             "top_moves": top_moves
         }
     except FileNotFoundError as e:
+        logger.error("Stockfish binary not found or configuration failure", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Konfigurasi engine gagal: {str(e)}"
+            detail="Konfigurasi engine catur gagal. Komponen internal tidak tersedia."
         )
     except Exception as e:
+        logger.error("Error occurred during chess analysis in test_engine", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Terjadi kesalahan saat memproses analisis: {str(e)}"
+            detail="Terjadi kesalahan internal saat memproses analisis posisi catur."
         )
 
 @app.get("/api/recommendations")
@@ -74,8 +98,8 @@ def get_recommendations(
     )
 ):
     """
-    Endpoint tambahan untuk menguji fungsi recommender.py yang menghasilkan tipe langkah,
-    penjelasan heuristik, dan risiko dalam bahasa Indonesia.
+    Endpoint untuk mendapatkan rekomendasi langkah lengkap dengan penjelasan
+    heuristik (type, explanation, risk, is_best) dalam bahasa Indonesia.
     """
     try:
         board = chess.Board(fen)
@@ -98,12 +122,14 @@ def get_recommendations(
             "recommendations": recommendations
         }
     except FileNotFoundError as e:
+        logger.error("Stockfish binary not found or configuration failure", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Konfigurasi engine gagal: {str(e)}"
+            detail="Konfigurasi engine catur gagal. Komponen internal tidak tersedia."
         )
     except Exception as e:
+        logger.error("Error occurred during chess recommendations calculation", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Terjadi kesalahan: {str(e)}"
+            detail="Terjadi kesalahan internal saat memproses rekomendasi langkah."
         )

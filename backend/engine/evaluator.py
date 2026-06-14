@@ -1,7 +1,46 @@
 import os
+import time
 import chess
 import chess.engine
 from backend.config import STOCKFISH_PATH
+
+class CircuitBreaker:
+    """
+    Pola Circuit Breaker untuk menghentikan pemanggilan engine Stockfish secara cepat
+    jika mengalami kegagalan berturut-turut (misal: timeout atau file tidak ditemukan).
+    """
+    def __init__(self, failure_threshold: int = 3, recovery_time: float = 30.0):
+        self.failure_threshold = failure_threshold
+        self.recovery_time = recovery_time
+        self.failure_count = 0
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
+        self.last_state_change = 0.0
+
+    def check_state(self):
+        if self.state == "OPEN":
+            # Cek apakah masa pendinginan (recovery time) telah terlewati
+            if time.time() - self.last_state_change > self.recovery_time:
+                self.state = "HALF-OPEN"
+                self.last_state_change = time.time()
+            else:
+                raise RuntimeError(
+                    "Circuit breaker sedang OPEN. Engine Stockfish sementara tidak tersedia "
+                    "karena kegagalan beruntun."
+                )
+
+    def record_success(self):
+        self.failure_count = 0
+        self.state = "CLOSED"
+        self.last_state_change = time.time()
+
+    def record_failure(self):
+        self.failure_count += 1
+        if self.failure_count >= self.failure_threshold:
+            self.state = "OPEN"
+            self.last_state_change = time.time()
+
+# Inisialisasi global Circuit Breaker
+engine_breaker = CircuitBreaker()
 
 def get_engine() -> chess.engine.SimpleEngine:
     """
@@ -20,58 +59,64 @@ def get_engine() -> chess.engine.SimpleEngine:
     except Exception as e:
         raise RuntimeError(f"Error starting Stockfish engine: {str(e)}")
 
-def get_evaluation(fen: str, depth: int = 15) -> int:
+def get_evaluation(fen: str, depth: int = 15, timeout: float = 10.0) -> int:
     """
     Mengembalikan nilai evaluasi centipawn (relatif terhadap White).
-    Untuk mate, mengembalikan nilai ekuivalen centipawn tinggi (e.g. 10000 / -10000).
+    Menggunakan limit waktu pencarian (timeout) untuk mencegah hang.
     """
+    engine_breaker.check_state()
     board = chess.Board(fen)
-    with get_engine() as engine:
-        info = engine.analyse(board, chess.engine.Limit(depth=depth))
-        # Mendapatkan skor dari sudut pandang White
-        white_score = info["score"].white()
-        # Jika mate, representasikan dengan nilai centipawn 10000
-        return white_score.score(mate_score=10000)
+    try:
+        with get_engine() as engine:
+            # Tetapkan limit berdasarkan depth dan timeout
+            limit = chess.engine.Limit(time=timeout, depth=depth)
+            info = engine.analyse(board, limit)
+            
+            # Mendapatkan skor dari sudut pandang White
+            white_score = info["score"].white()
+            score = white_score.score(mate_score=10000)
+            
+            engine_breaker.record_success()
+            return score
+    except Exception as e:
+        engine_breaker.record_failure()
+        raise e
 
-def get_top_moves(fen: str, n: int = 3, depth: int = 15) -> list:
+def get_top_moves(fen: str, n: int = 3, depth: int = 15, timeout: float = 10.0) -> list:
     """
     Mengembalikan daftar top n moves beserta informasi uci, san, score, dan mate_in.
-    Format return:
-    [
-        {
-            "move_uci": str,
-            "move_san": str,
-            "score": int,
-            "mate_in": int | None
-        },
-        ...
-    ]
+    Menggunakan limit waktu pencarian (timeout) untuk mencegah hang.
     """
+    engine_breaker.check_state()
     board = chess.Board(fen)
-    with get_engine() as engine:
-        # Menganalisis dengan multipv untuk mendapatkan n pilihan langkah terbaik
-        info = engine.analyse(board, chess.engine.Limit(depth=depth), multipv=n)
-        
-        # python-chess mengembalikan list untuk multipv yang diurutkan dari yang terbaik
-        top_moves = []
-        for entry in info:
-            if "pv" not in entry or not entry["pv"]:
-                continue
+    try:
+        with get_engine() as engine:
+            # Tetapkan limit berdasarkan depth dan timeout
+            limit = chess.engine.Limit(time=timeout, depth=depth)
+            info = engine.analyse(board, limit, multipv=n)
             
-            # Langkah pertama pada variasi/PV ini
-            move = entry["pv"][0]
-            move_uci = move.uci()
-            move_san = board.san(move)
-            
-            pov_score = entry["score"].white()
-            score = pov_score.score(mate_score=10000)
-            mate_in = pov_score.mate() # integer (positive if white mates, negative if black mates) or None
-            
-            top_moves.append({
-                "move_uci": move_uci,
-                "move_san": move_san,
-                "score": score,
-                "mate_in": mate_in
-            })
-            
-        return top_moves
+            top_moves = []
+            for entry in info:
+                if "pv" not in entry or not entry["pv"]:
+                    continue
+                
+                move = entry["pv"][0]
+                move_uci = move.uci()
+                move_san = board.san(move)
+                
+                pov_score = entry["score"].white()
+                score = pov_score.score(mate_score=10000)
+                mate_in = pov_score.mate()
+                
+                top_moves.append({
+                    "move_uci": move_uci,
+                    "move_san": move_san,
+                    "score": score,
+                    "mate_in": mate_in
+                })
+                
+            engine_breaker.record_success()
+            return top_moves
+    except Exception as e:
+        engine_breaker.record_failure()
+        raise e
