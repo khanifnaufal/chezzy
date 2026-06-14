@@ -1,20 +1,39 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
+
+export interface BoardRef {
+  sendMove: (move: { from: string; to: string; promotion?: string; uci?: string }) => void;
+}
 
 interface BoardProps {
   position: string;
   playerColor: 'white' | 'black';
-  onMove?: (move: { from: string; to: string; promotion?: string; san?: string; uci?: string }) => void;
+  sessionId?: string;
+  onMoveResult?: (result: {
+    san: string;
+    label: string;
+    score_before: number;
+    score_after: number;
+    explanation: string;
+    current_fen: string;
+  }) => void;
   highlightSquares?: Record<string, React.CSSProperties> | string[];
 }
 
-export default function Board({ position, playerColor, onMove, highlightSquares }: BoardProps) {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares }, ref) => {
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const onMoveResultRef = useRef(onMoveResult);
+
+  useEffect(() => {
+    onMoveResultRef.current = onMoveResult;
+  }, [onMoveResult]);
 
   // Sync internal board game when the parent position prop changes
   useEffect(() => {
@@ -23,11 +42,20 @@ export default function Board({ position, playerColor, onMove, highlightSquares 
         const newGame = new Chess(position);
         setGame(newGame);
         setCurrentFen(position);
+        
+        // Sync last move highlight
+        const history = newGame.history({ verbose: true });
+        if (history.length > 0) {
+          const last = history[history.length - 1];
+          setLastMove({ from: last.from, to: last.to });
+        } else {
+          setLastMove(null);
+        }
       } catch (e) {
         console.error('Failed to sync board game with parent position FEN:', e);
       }
     }
-  }, [position]);
+  }, [position, game]);
 
   // Reset/re-initialize board when playerColor changes
   useEffect(() => {
@@ -37,29 +65,110 @@ export default function Board({ position, playerColor, onMove, highlightSquares 
     setLastMove(null);
   }, [playerColor]);
 
-  // Handle move validation and execution
+  // Establish WebSocket connection
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const wsUrl = `ws://localhost:8000/ws/game/${sessionId}`;
+    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'initial_fen') {
+          console.log('Received initial FEN from WS:', data.fen);
+          const newGame = new Chess(data.fen);
+          setGame(newGame);
+          setCurrentFen(data.fen);
+        } else if (data.type === 'move_result') {
+          console.log('Received move result from WS:', data);
+          const newGame = new Chess(data.current_fen);
+          setGame(newGame);
+          setCurrentFen(data.current_fen);
+
+          const history = newGame.history({ verbose: true });
+          if (history.length > 0) {
+            const last = history[history.length - 1];
+            setLastMove({ from: last.from, to: last.to });
+          }
+
+          if (onMoveResultRef.current) {
+            onMoveResultRef.current(data);
+          }
+        } else if (data.type === 'error') {
+          console.error('WebSocket game error:', data.message);
+          // Revert local state to parent's position on error
+          const resetGame = new Chess(position);
+          setGame(resetGame);
+          setCurrentFen(position);
+        }
+      } catch (e) {
+        console.error('Error handling WS message:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+    };
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [sessionId, position]);
+
+  // Send a move through WebSocket
+  const sendMoveViaWS = (move: { from: string; to: string; promotion?: string; uci?: string }) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const uci = move.uci || `${move.from}${move.to}${move.promotion || ''}`;
+      const isWhite = game.turn() === 'w';
+      
+      console.log('Sending move via WS:', { type: 'move', uci, is_white: isWhite });
+      ws.send(JSON.stringify({
+        type: 'move',
+        uci,
+        is_white: isWhite
+      }));
+    } else {
+      console.warn('WebSocket is not open. Cannot send move.');
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    sendMove: sendMoveViaWS
+  }));
+
+  // Handle move validation and execution (local test and WS request)
   const makeAMove = (from: string, to: string, promotion?: string): boolean => {
     try {
       const moveObj = { from, to, promotion };
-      const moveResult = game.move(moveObj);
+      const tempGame = new Chess(game.fen());
+      const moveResult = tempGame.move(moveObj);
       
       if (moveResult) {
-        setCurrentFen(game.fen());
+        // Optimistically update local board first so piece moves smoothly
+        setGame(tempGame);
+        setCurrentFen(tempGame.fen());
         setLastMove({ from, to });
         
-        if (onMove) {
-          onMove({
-            from,
-            to,
-            promotion,
-            san: moveResult.san,
-            uci: moveResult.from + moveResult.to + (moveResult.promotion || ''),
-          });
-        }
+        // Send move to server
+        sendMoveViaWS({
+          from,
+          to,
+          promotion,
+          uci: from + to + (promotion || '')
+        });
         return true;
       }
     } catch (error) {
-      console.warn('Move rejected by chess.js (illegal move):', error);
+      console.warn('Move validation failed locally:', error);
     }
     return false;
   };
@@ -132,4 +241,8 @@ export default function Board({ position, playerColor, onMove, highlightSquares 
       />
     </div>
   );
-}
+});
+
+Board.displayName = 'Board';
+
+export default Board;

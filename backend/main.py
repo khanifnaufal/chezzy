@@ -1,11 +1,14 @@
 import chess
 import logging
 import asyncio
+import uuid
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
+from pydantic import BaseModel
 from backend.engine.evaluator import get_evaluation, get_top_moves
 from backend.engine.recommender import recommend_moves
+from backend.routers import ws
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -133,3 +136,27 @@ def get_recommendations(
             status_code=500,
             detail="Terjadi kesalahan internal saat memproses rekomendasi langkah."
         )
+
+# Include the WebSocket router
+app.include_router(ws.router)
+
+class StartGameRequest(BaseModel):
+    playerColor: str = "white"
+
+@app.post("/api/game/start")
+def start_game(request: StartGameRequest):
+    """
+    Endpoint untuk memulai game baru. Menghasilkan session_id unik
+    dan menginisialisasi papan catur di in-memory active_games.
+    """
+    session_id = str(uuid.uuid4())
+    ws.active_games[session_id] = chess.Board()
+    
+    return {
+        "session_id": session_id,
+        "id": session_id,
+        "fen": ws.active_games[session_id].fen(),
+        "playerColor": request.playerColor,
+        "moves": [],
+        "status": "active"
+    }

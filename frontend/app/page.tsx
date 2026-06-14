@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import Board from '../components/Board';
+import Board, { BoardRef } from '../components/Board';
 import { getRecommendations, startGame, sendMove } from '../lib/api';
 import { Recommendation, Game } from '../lib/types';
 import { Chess } from 'chess.js';
@@ -13,6 +13,12 @@ function ChessAnalyzerApp() {
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white');
   const [showColorModal, setShowColorModal] = useState(false);
+  const boardRef = useRef<BoardRef>(null);
+  const [lastMoveEvaluation, setLastMoveEvaluation] = useState<{
+    san: string;
+    label: string;
+    explanation: string;
+  } | null>(null);
   
   // Game mode: 'bot' (random move opponent) or 'analysis' (freely move both sides)
   const [gameMode, setGameMode] = useState<'bot' | 'analysis'>('bot');
@@ -46,24 +52,16 @@ function ChessAnalyzerApp() {
         const moves = localGame.moves({ verbose: true });
         if (moves.length > 0) {
           const randomMove = moves[Math.floor(Math.random() * moves.length)];
-          localGame.move({
-            from: randomMove.from,
-            to: randomMove.to,
-            promotion: randomMove.promotion,
-          });
+          const uci = randomMove.from + randomMove.to + (randomMove.promotion || '');
           
-          const nextFen = localGame.fen();
-          setCurrentFen(nextFen);
-          setMoveHistory(prev => [...prev, randomMove.san]);
-          
-          // Send move to backend to keep it synced (gracefully handled offline)
-          sendMove(activeGame.id, {
-            from: randomMove.from,
-            to: randomMove.to,
-            promotion: randomMove.promotion,
-            san: randomMove.san,
-            uci: randomMove.from + randomMove.to + (randomMove.promotion || ''),
-          });
+          if (boardRef.current) {
+            boardRef.current.sendMove({
+              from: randomMove.from,
+              to: randomMove.to,
+              promotion: randomMove.promotion,
+              uci: uci
+            });
+          }
         }
       }, 1000);
       return () => clearTimeout(timer);
@@ -88,6 +86,7 @@ function ChessAnalyzerApp() {
       setCurrentFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
       setMoveHistory([]);
       setLocalGame(new Chess());
+      setLastMoveEvaluation(null);
     } catch (error) {
       console.error('Failed to start game:', error);
       // Optionally show an error message to the user
@@ -95,39 +94,22 @@ function ChessAnalyzerApp() {
     }
   };
 
-  const handleMovePlayed = (move: { from: string; to: string; promotion?: string; san?: string; uci?: string }) => {
-    if (!activeGame) return;
-    
-    try {
-      // Apply the move to localGame to advance turn and FEN
-      localGame.move({
-        from: move.from,
-        to: move.to,
-        promotion: move.promotion,
-      });
-
-      // Update board FEN with the new position
-      const nextFen = localGame.fen();
-      setCurrentFen(nextFen);
-
-      if (move.san) {
-        setMoveHistory((prev) => [...prev, move.san!]);
-      }
-      
-      // Reset hovered move
-      setHoveredMoveUci(null);
-
-      // Send move to backend
-      sendMove(activeGame.id, {
-        from: move.from,
-        to: move.to,
-        promotion: move.promotion,
-        san: move.san,
-        uci: move.uci,
-      });
-    } catch (e) {
-      console.error('Failed to apply player move to localGame:', e);
-    }
+  const handleMoveResult = (result: {
+    san: string;
+    label: string;
+    score_before: number;
+    score_after: number;
+    explanation: string;
+    current_fen: string;
+  }) => {
+    setCurrentFen(result.current_fen);
+    setMoveHistory((prev) => [...prev, result.san]);
+    setLastMoveEvaluation({
+      san: result.san,
+      label: result.label,
+      explanation: result.explanation,
+    });
+    setHoveredMoveUci(null);
   };
 
   const playRecommendedMove = (uci: string) => {
@@ -143,23 +125,8 @@ function ChessAnalyzerApp() {
     const to = uci.slice(2, 4);
     const promotion = uci.length > 4 ? uci[4] : undefined;
 
-    try {
-      const moveResult = localGame.move({ from, to, promotion });
-      if (moveResult) {
-        setCurrentFen(localGame.fen());
-        setMoveHistory((prev) => [...prev, moveResult.san]);
-        setHoveredMoveUci(null);
-        
-        sendMove(activeGame.id, {
-          from,
-          to,
-          promotion,
-          san: moveResult.san,
-          uci,
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to play recommended move:', e);
+    if (boardRef.current) {
+      boardRef.current.sendMove({ from, to, promotion, uci });
     }
   };
 
@@ -284,8 +251,10 @@ function ChessAnalyzerApp() {
               <Board
                 position={currentFen}
                 playerColor={playerColor}
-                onMove={handleMovePlayed}
+                sessionId={activeGame?.id}
+                onMoveResult={handleMoveResult}
                 highlightSquares={recommendationHighlights}
+                ref={boardRef}
               />
 
               {/* Player Card */}
@@ -300,6 +269,7 @@ function ChessAnalyzerApp() {
                   </span>
                 )}
               </div>
+
             </div>
 
             {/* Right: Sidebar Analysis Column */}
@@ -327,6 +297,35 @@ function ChessAnalyzerApp() {
                     </button>
                   </div>
                 </div>
+
+                {/* Last Move Evaluation */}
+                {lastMoveEvaluation && (
+                  <div className="border-b border-slate-800 pb-3 flex flex-col gap-2 animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Langkah Terakhir:</span>
+                      <span className="text-sm font-bold font-mono text-indigo-400">
+                        {lastMoveEvaluation.san}
+                      </span>
+                      <span className="text-slate-500">—</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${
+                        lastMoveEvaluation.label === 'Brilliant' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                        lastMoveEvaluation.label === 'Excellent' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        lastMoveEvaluation.label === 'Good' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        lastMoveEvaluation.label === 'Inaccuracy' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                        lastMoveEvaluation.label === 'Mistake' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                        lastMoveEvaluation.label === 'Blunder' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                        'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                      }`}>
+                        {lastMoveEvaluation.label} {
+                          lastMoveEvaluation.label === 'Brilliant' || lastMoveEvaluation.label === 'Excellent' || lastMoveEvaluation.label === 'Good' ? '✓' : '✗'
+                        }
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                      {lastMoveEvaluation.explanation}
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Riwayat Langkah</h3>
