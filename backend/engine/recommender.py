@@ -12,6 +12,16 @@ PIECE_NAMES = {
     chess.KING: "raja"
 }
 
+# Bobot nilai perwira untuk kalkulasi ancaman
+PIECE_VALUES = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+    chess.KING: 100
+}
+
 def analyze_move_heuristics(board: chess.Board, move: chess.Move, phase: str) -> dict:
     """
     Menganalisis langkah catur menggunakan python-chess untuk mengekstrak data heuristik.
@@ -165,3 +175,104 @@ def recommend_moves(fen: str, is_white: bool) -> list:
         })
         
     return recommended
+
+def detect_opponent_threats(board: chess.Board, last_move: chess.Move, player_color_str: str) -> str:
+    """
+    Mendeteksi ancaman yang dibuat oleh langkah terakhir lawan berdasarkan:
+    1. Skak terhadap Raja (King in danger)
+    2. Fork (Cabang/Garpu terhadap >= 2 perwira berharga)
+    3. Pin (Perwira ter-pin ke Raja)
+    4. Skewer (Perwira berharga tinggi terancam, dengan perwira bernilai sama/rendah di belakangnya)
+    5. Ancaman langsung terhadap perwira yang tidak terlindungi atau bernilai tinggi
+    """
+    player_color = chess.WHITE if player_color_str == "white" else chess.BLACK
+    
+    # 1. Cek apakah king kamu dalam bahaya (skak)
+    if board.is_check():
+        checkers = board.checkers()
+        if checkers:
+            checker_names = []
+            for sq in checkers:
+                p = board.piece_at(sq)
+                if p:
+                    checker_names.append(f"{PIECE_NAMES.get(p.piece_type, 'perwira')} di {chess.square_name(sq)}")
+            if checker_names:
+                return f"Raja Anda terancam skak oleh {', '.join(checker_names)}"
+            return "Raja Anda dalam bahaya skak!"
+            
+    # 2. Cek apakah lawan membuat fork (garpu) menggunakan piece yang baru saja bergerak
+    opp_sq = last_move.to_square
+    opp_piece = board.piece_at(opp_sq)
+    if opp_piece:
+        attacked_squares = board.attacks(opp_sq)
+        player_pieces_attacked = []
+        for sq in attacked_squares:
+            piece = board.piece_at(sq)
+            if piece and piece.color == player_color:
+                player_pieces_attacked.append((sq, piece))
+        
+        # Garpu terjadi jika menyerang minimal 2 perwira
+        if len(player_pieces_attacked) >= 2:
+            piece_strs = [f"{PIECE_NAMES.get(p.piece_type, 'perwira')} di {chess.square_name(sq)}" for sq, p in player_pieces_attacked]
+            opp_name = PIECE_NAMES.get(opp_piece.piece_type, "perwira")
+            return f"Garpu (fork) oleh {opp_name} terhadap {', '.join(piece_strs[:-1])} dan {piece_strs[-1]}"
+            
+    # 3. Cek apakah lawan membuat pin menggunakan piece yang baru saja bergerak
+    pinned_pieces_by_last_move = []
+    for sq in chess.SQUARES:
+        piece = board.piece_at(sq)
+        if piece and piece.color == player_color:
+            if board.is_pinned(player_color, sq):
+                if sq in board.attacks(opp_sq):
+                    pinned_pieces_by_last_move.append((sq, piece))
+    if pinned_pieces_by_last_move:
+        pinned_strs = [f"{PIECE_NAMES.get(p.piece_type, 'perwira')} di {chess.square_name(sq)}" for sq, p in pinned_pieces_by_last_move]
+        opp_name = PIECE_NAMES.get(opp_piece.piece_type, "perwira") if opp_piece else "perwira"
+        return f"Pin terhadap {', '.join(pinned_strs)} oleh {opp_name} di {chess.square_name(opp_sq)}"
+
+    # 4. Cek apakah lawan membuat skewer (tusukan) menggunakan piece yang baru saja bergerak (sliding piece)
+    if opp_piece and opp_piece.piece_type in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+        attacked_squares = board.attacks(opp_sq)
+        for sq_A in attacked_squares:
+            piece_A = board.piece_at(sq_A)
+            if piece_A and piece_A.color == player_color:
+                # Simulasikan jika piece A disingkirkan dari papan
+                board.remove_piece_at(sq_A)
+                new_attacks = board.attacks(opp_sq)
+                board.set_piece_at(sq_A, piece_A) # Kembalikan segera
+                
+                for sq_B in new_attacks:
+                    if sq_B != sq_A and sq_B not in attacked_squares:
+                        piece_B = board.piece_at(sq_B)
+                        if piece_B and piece_B.color == player_color:
+                            val_A = PIECE_VALUES.get(piece_A.piece_type, 0)
+                            val_B = PIECE_VALUES.get(piece_B.piece_type, 0)
+                            # Skewer menyerang perwira bernilai lebih tinggi/sama di depan perwira bernilai lebih rendah/sama
+                            if val_A >= val_B:
+                                opp_name = PIECE_NAMES.get(opp_piece.piece_type, "perwira")
+                                return f"Skewer terhadap {PIECE_NAMES.get(piece_A.piece_type)} di {chess.square_name(sq_A)} dan {PIECE_NAMES.get(piece_B.piece_type)} di {chess.square_name(sq_B)} oleh {opp_name} di {chess.square_name(opp_sq)}"
+
+    # 5. Cek apakah setelah move lawan ada piece kamu yang terancam langsung
+    if opp_piece:
+        attacked_squares = board.attacks(opp_sq)
+        threatened_pieces = []
+        for sq in attacked_squares:
+            piece = board.piece_at(sq)
+            if piece and piece.color == player_color:
+                # Evaluasi apakah perwira ini benar-benar terancam (tidak terlindungi atau diserang perwira bernilai lebih rendah)
+                is_defended = len(board.attackers(player_color, sq)) > 0
+                val_attacker = PIECE_VALUES.get(opp_piece.piece_type, 0)
+                val_target = PIECE_VALUES.get(piece.piece_type, 0)
+                if not is_defended or (val_attacker < val_target):
+                    if piece.piece_type != chess.KING:
+                        threatened_pieces.append((sq, piece))
+        if threatened_pieces:
+            # Urutkan berdasarkan nilai perwira tertinggi terlebih dahulu
+            threatened_pieces.sort(key=lambda x: PIECE_VALUES.get(x[1].piece_type, 0), reverse=True)
+            best_threat_sq, best_threat_piece = threatened_pieces[0]
+            is_defended = len(board.attackers(player_color, best_threat_sq)) > 0
+            defended_str = "tidak terlindungi" if not is_defended else "terlindungi"
+            opp_name = PIECE_NAMES.get(opp_piece.piece_type, "perwira")
+            return f"{PIECE_NAMES.get(best_threat_piece.piece_type, 'perwira').capitalize()} Anda di {chess.square_name(best_threat_sq)} terancam oleh {opp_name} di {chess.square_name(opp_sq)} ({defended_str})"
+            
+    return ""

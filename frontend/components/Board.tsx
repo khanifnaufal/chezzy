@@ -21,6 +21,7 @@ interface BoardProps {
     explanation: string | null;
     current_fen: string;
     recommendations?: any[];
+    opponent_analysis?: any;
   }) => void;
   highlightSquares?: string[];
   gameMode?: 'bot' | 'analysis';

@@ -3,7 +3,12 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from backend.engine.evaluator import get_evaluation, get_top_moves
 from backend.engine.labeler import label_move, get_phase
-from backend.engine.recommender import analyze_move_heuristics, generate_explanation_and_risk, recommend_moves
+from backend.engine.recommender import (
+    analyze_move_heuristics,
+    generate_explanation_and_risk,
+    recommend_moves,
+    detect_opponent_threats
+)
 
 logger = logging.getLogger("chess_analyzer")
 
@@ -160,6 +165,12 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                 except Exception as e:
                     logger.error(f"Error evaluating position after move: {e}")
                 
+                # Retrieve player color and check if it is opponent's move
+                if session_id not in active_game_colors:
+                    raise KeyError(f"Session {session_id} color metadata missing.")
+                player_color = active_game_colors[session_id]
+                is_opponent_move = (player_color == "white" and not is_white) or (player_color == "black" and is_white)
+
                 # Generate final move label and explanation, handling engine failure gracefully
                 if score_before is None or score_after is None:
                     label = "Unknown"
@@ -168,6 +179,39 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                     label = label_move(score_before, score_after, is_white, is_unexpected)
                     final_explanation = get_move_explanation(label, h, explanation_raw, risk_raw)
                 
+                # Calculate recommendations if next turn belongs to player
+                recs = []
+                next_is_white = (board.turn == chess.WHITE)
+                is_next_player_turn = (player_color == "white" and next_is_white) or (player_color == "black" and not next_is_white)
+                if is_next_player_turn:
+                    try:
+                        recs = recommend_moves(board.fen(), next_is_white)
+                    except Exception as e:
+                        logger.error(f"Error calculating recommendations: {e}")
+                        recs = []
+
+                # Calculate opponent analysis if this was an opponent's move
+                opponent_analysis = None
+                if is_opponent_move:
+                    threat_str = detect_opponent_threats(board, move, player_color)
+                    best_response_str = ""
+                    if recs:
+                        best_response_str = recs[0]["move_san"]
+                    else:
+                        try:
+                            top_moves = get_top_moves(board.fen(), n=1)
+                            if top_moves:
+                                best_response_str = top_moves[0]["move_san"]
+                        except Exception as e:
+                            logger.error(f"Error calculating fallback best response: {e}")
+                    
+                    opponent_analysis = {
+                        "label": label,
+                        "explanation": final_explanation,
+                        "threat": threat_str,
+                        "best_response": best_response_str
+                    }
+
                 # Prepare response payload
                 response_payload = {
                     "type": "move_result",
@@ -176,22 +220,10 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                     "score_before": score_before,
                     "score_after": score_after,
                     "explanation": final_explanation,
-                    "current_fen": board.fen()
+                    "current_fen": board.fen(),
+                    "recommendations": recs,
+                    "opponent_analysis": opponent_analysis
                 }
-
-                # Add recommendations if next turn belongs to player
-                if session_id not in active_game_colors:
-                    raise KeyError(f"Session {session_id} color metadata missing.")
-                player_color = active_game_colors[session_id]
-                next_is_white = (board.turn == chess.WHITE)
-                is_next_player_turn = (player_color == "white" and next_is_white) or (player_color == "black" and not next_is_white)
-                if is_next_player_turn:
-                    try:
-                        recs = recommend_moves(board.fen(), next_is_white)
-                        response_payload["recommendations"] = recs
-                    except Exception as e:
-                        logger.error(f"Error calculating recommendations: {e}")
-                        response_payload["recommendations"] = []
 
                 # Send the response back to client
                 await websocket.send_json(response_payload)

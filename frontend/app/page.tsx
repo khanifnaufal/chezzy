@@ -23,6 +23,10 @@ function ChessAnalyzerApp() {
     label: string;
     explanation: string;
   } | null>(null);
+  const [activeThreat, setActiveThreat] = useState<{
+    threat: string;
+    bestResponse: string;
+  } | null>(null);
   
   // Game mode: 'bot' (random move opponent) or 'analysis' (freely move both sides)
   const [gameMode, setGameMode] = useState<'bot' | 'analysis'>('bot');
@@ -110,6 +114,7 @@ function ChessAnalyzerApp() {
       setMoves([]);
       setLocalGame(new Chess());
       setLastMoveEvaluation(null);
+      setActiveThreat(null);
       setCurrentScore(0);
       setRecommendations([]);
       setHighlightSquares([]);
@@ -130,6 +135,7 @@ function ChessAnalyzerApp() {
     explanation: string | null;
     current_fen: string;
     recommendations?: Recommendation[];
+    opponent_analysis?: any;
   }) => {
     setCurrentFen(result.current_fen);
     if (result.score_after !== null && result.score_after !== undefined) {
@@ -140,6 +146,16 @@ function ChessAnalyzerApp() {
       setRecommendations(result.recommendations);
       setIsRecommendLoading(false);
       recommendationsFenRef.current = result.current_fen;
+    }
+
+    // Set or clear the active threat warning banner
+    if (result.opponent_analysis && result.opponent_analysis.threat) {
+      setActiveThreat({
+        threat: result.opponent_analysis.threat,
+        bestResponse: result.opponent_analysis.best_response,
+      });
+    } else {
+      setActiveThreat(null);
     }
 
     if (result.san) {
@@ -160,6 +176,7 @@ function ChessAnalyzerApp() {
           label: result.label || '',
           explanation: result.explanation || '',
           isWhite,
+          opponent_analysis: result.opponent_analysis,
         };
         
         return [...prev, newMove];
@@ -236,7 +253,17 @@ function ChessAnalyzerApp() {
           </div>
         ) : (
           /* Active Board Workspace (Responsive 3-Column Layout) */
-          <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
+          <div className="w-full flex flex-col gap-6 items-center">
+            {activeThreat && (
+              <div className="w-full max-w-5xl bg-amber-500/10 border border-amber-500/30 text-amber-200 px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg shadow-amber-500/5 animate-fade-in">
+                <span className="text-xl">⚠</span>
+                <div className="flex-1 text-sm font-medium">
+                  Lawan mengancam <span className="font-semibold text-amber-100">{activeThreat.threat}</span> &mdash;{" "}
+                  Respons terbaik: <span className="font-bold font-mono text-emerald-400 bg-slate-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20">{activeThreat.bestResponse}</span>
+                </div>
+              </div>
+            )}
+            <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
             
             {/* Column 1 & 2: Chessboard and EvalBar Column */}
             <div className="flex flex-col items-center gap-4 w-full max-w-[540px]">
@@ -353,6 +380,7 @@ function ChessAnalyzerApp() {
                 isLoading={isRecommendLoading}
               />
             </div>
+          </div>
           </div>
         )}
       </main>

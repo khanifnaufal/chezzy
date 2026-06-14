@@ -2,12 +2,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 
+export interface OpponentAnalysis {
+  label: string;
+  explanation: string;
+  threat: string;
+  best_response: string;
+}
+
 export interface Move {
   moveNumber: number;
   san: string;
   label: string;
   explanation: string;
   isWhite: boolean;
+  opponent_analysis?: OpponentAnalysis | null;
 }
 
 interface MoveListProps {
@@ -181,28 +189,62 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
       )}
 
       {/* Tooltip positioned container-relative to avoid clipping */}
-      {hoveredMove && (
-        <div
-          style={{
-            left: `${tooltipPos.x}px`,
-            top: `${tooltipPos.y}px`,
-            transform: 'translate(-50%, -100%)',
-          }}
-          className="absolute z-50 pointer-events-none w-64 p-3 rounded-xl bg-slate-950/95 backdrop-blur-md border border-slate-800 text-slate-100 shadow-2xl text-xs transition-all duration-150"
-        >
-          <div className="font-bold font-mono text-indigo-400 mb-1 flex items-center justify-between">
-            <span>
-              {hoveredMove.moveNumber}{hoveredMove.isWhite ? '.' : '...'} {hoveredMove.san}
-            </span>
-            <span className="text-[10px] opacity-80">({hoveredMove.label})</span>
+      {hoveredMove && (() => {
+        const isOpponent = !!hoveredMove.opponent_analysis;
+        const displayLabel = isOpponent ? hoveredMove.opponent_analysis!.label : hoveredMove.label;
+        const displayExplanation = isOpponent ? hoveredMove.opponent_analysis!.explanation : hoveredMove.explanation;
+        const threat = isOpponent ? hoveredMove.opponent_analysis!.threat : null;
+        const bestResponse = isOpponent ? hoveredMove.opponent_analysis!.best_response : null;
+
+        return (
+          <div
+            style={{
+              left: `${tooltipPos.x}px`,
+              top: `${tooltipPos.y}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+            className="absolute z-50 pointer-events-none w-72 p-3.5 rounded-xl bg-slate-950/95 backdrop-blur-md border border-slate-800 text-slate-100 shadow-2xl text-xs transition-all duration-150 flex flex-col gap-2"
+          >
+            <div className="font-bold font-mono text-indigo-400 flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span>
+                {hoveredMove.moveNumber}{hoveredMove.isWhite ? '.' : '...'} {hoveredMove.san}
+              </span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border uppercase ${
+                displayLabel === 'Brilliant' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                displayLabel === 'Excellent' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                displayLabel === 'Good' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                displayLabel === 'Inaccuracy' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                displayLabel === 'Mistake' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                displayLabel === 'Blunder' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                'bg-slate-500/10 text-slate-400 border-slate-500/20'
+              }`}>
+                {displayLabel}
+              </span>
+            </div>
+            <p className="text-slate-300 leading-relaxed font-medium">
+              {displayExplanation}
+            </p>
+            {isOpponent && (
+              <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800/80">
+                {threat && (
+                  <div className="text-amber-400 font-semibold flex items-start gap-1">
+                    <span className="shrink-0 text-amber-500">⚠</span>
+                    <span>Ancaman: <span className="font-normal text-slate-200">{threat}</span></span>
+                  </div>
+                )}
+                {bestResponse && (
+                  <div className="text-emerald-400 font-semibold flex items-start gap-1">
+                    <span className="shrink-0 text-emerald-500">💡</span>
+                    <span>Respons terbaik: <span className="font-bold font-mono text-slate-100">{bestResponse}</span></span>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Triangle arrow pointer */}
+            <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-3 h-3 bg-slate-950/95 border-r border-b border-slate-800 rotate-45" />
           </div>
-          <p className="text-slate-300 leading-relaxed font-medium">
-            {hoveredMove.explanation}
-          </p>
-          {/* Triangle arrow pointer */}
-          <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-3 h-3 bg-slate-950/95 border-r border-b border-slate-800 rotate-45" />
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
