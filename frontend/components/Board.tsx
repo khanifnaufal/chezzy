@@ -7,6 +7,7 @@ import { WS_URL } from '../lib/api';
 
 export interface BoardRef {
   sendMove: (move: { from: string; to: string; promotion?: string; uci?: string }) => void;
+  sendResign: () => void;
 }
 
 interface BoardProps {
@@ -22,6 +23,12 @@ interface BoardProps {
     current_fen: string;
     recommendations?: any[];
     opponent_analysis?: any;
+    game_over?: {
+      result: string;
+      reason: string;
+      white_accuracy: number;
+      black_accuracy: number;
+    };
   }) => void;
   highlightSquares?: string[];
   gameMode?: 'bot' | 'analysis';
@@ -116,6 +123,24 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
           if (onMoveResultRef.current) {
             onMoveResultRef.current(data);
           }
+        } else if (data.type === 'game_over') {
+          // Forward game_over as a special move result to the parent
+          if (onMoveResultRef.current) {
+            onMoveResultRef.current({
+              san: null,
+              label: null,
+              score_before: null,
+              score_after: null,
+              explanation: null,
+              current_fen: game.fen(),
+              game_over: {
+                result: data.result,
+                reason: data.reason,
+                white_accuracy: data.white_accuracy,
+                black_accuracy: data.black_accuracy,
+              },
+            });
+          }
         } else if (data.type === 'error') {
           console.error('WebSocket game error:', data.message);
           // Revert local state to parent's position on error using positionRef
@@ -160,8 +185,18 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     }
   };
 
+  const sendResignViaWS = () => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'resign' }));
+    } else {
+      console.warn('WebSocket is not open. Cannot send resign.');
+    }
+  };
+
   useImperativeHandle(ref, () => ({
-    sendMove: sendMoveViaWS
+    sendMove: sendMoveViaWS,
+    sendResign: sendResignViaWS,
   }));
 
   // Handle move validation and execution (local test and WS request)

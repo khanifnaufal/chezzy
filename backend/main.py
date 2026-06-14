@@ -1,15 +1,14 @@
 import chess
 import logging
 import asyncio
-import uuid
-from typing import Literal
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
-from pydantic import BaseModel
 from backend.engine.evaluator import get_evaluation, get_top_moves
 from backend.engine.recommender import recommend_moves
 from backend.routers import ws
+from backend.routers import game as game_router
+from backend.db.database import init_db
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,9 +20,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Menambahkan CORS Middleware agar bisa diakses oleh Next.js frontend nantinya.
-# Karena menggunakan allow_credentials=True, origins TIDAK BOLEH bernilai ["*"].
-# Kami menggunakan origin spesifik "http://localhost:3000" untuk masa development.
+# CORS Middleware — allow Next.js frontend during development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:3001"],
@@ -32,22 +29,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Middleware untuk menangani request-level timeout (mencegah thread starvation jika ada proses hang)
+# Request-level timeout middleware (prevents thread starvation on hang)
 @app.middleware("http")
 async def timeout_middleware(request: Request, call_next):
     try:
-        # Enforce a 15-second request timeout limit
         return await asyncio.wait_for(call_next(request), timeout=15.0)
     except asyncio.TimeoutError:
-        logger.error(f"Request timeout occurred for endpoint: {request.url.path}")
+        logger.error(f"Request timeout for endpoint: {request.url.path}")
         return JSONResponse(
             status_code=504,
             content={"detail": "Batas waktu permintaan terlampaui. Server membutuhkan waktu terlalu lama untuk merespons."}
         )
 
+
+@app.on_event("startup")
+def on_startup():
+    """Initialise database tables on server start."""
+    try:
+        init_db()
+    except Exception as e:
+        logger.error(f"Database initialisation failed: {e}", exc_info=True)
+        logger.warning("Server will continue without DB persistence.")
+
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Welcome to Chess Analyzer API"}
+
 
 @app.get("/api/test-engine")
 def test_engine(
@@ -61,7 +69,6 @@ def test_engine(
     Menerima parameter FEN, mengevaluasi posisi tersebut, dan mengembalikan evaluasi numerik
     (centipawn) serta top 3 langkah terbaik.
     """
-    # Validasi format FEN menggunakan python-chess
     try:
         board = chess.Board(fen)
     except ValueError:
@@ -71,28 +78,22 @@ def test_engine(
         )
 
     try:
-        # Mendapatkan evaluasi saat ini dengan timeout pencarian 10 detik
         evaluation = get_evaluation(fen, timeout=10.0)
-        
-        # Mendapatkan top 3 move menggunakan evaluator dengan timeout pencarian 10 detik
         top_moves = get_top_moves(fen, n=3, timeout=10.0)
-        
-        return {
-            "evaluation": evaluation,
-            "top_moves": top_moves
-        }
-    except FileNotFoundError as e:
+        return {"evaluation": evaluation, "top_moves": top_moves}
+    except FileNotFoundError:
         logger.error("Stockfish binary not found or configuration failure", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Konfigurasi engine catur gagal. Komponen internal tidak tersedia."
         )
-    except Exception as e:
+    except Exception:
         logger.error("Error occurred during chess analysis in test_engine", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Terjadi kesalahan internal saat memproses analisis posisi catur."
         )
+
 
 @app.get("/api/recommendations")
 def get_recommendations(
@@ -108,57 +109,26 @@ def get_recommendations(
     try:
         board = chess.Board(fen)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Format FEN tidak valid."
-        )
+        raise HTTPException(status_code=400, detail="Format FEN tidak valid.")
 
     try:
-        # Menentukan turn (apakah giliran Putih yang melangkah)
         is_white = board.turn == chess.WHITE
-        
-        # Mendapatkan rekomendasi langkah lengkap dengan penjelasan
         recommendations = recommend_moves(fen, is_white)
-        
-        return {
-            "fen": fen,
-            "turn": "white" if is_white else "black",
-            "recommendations": recommendations
-        }
-    except FileNotFoundError as e:
+        return {"fen": fen, "turn": "white" if is_white else "black", "recommendations": recommendations}
+    except FileNotFoundError:
         logger.error("Stockfish binary not found or configuration failure", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Konfigurasi engine catur gagal. Komponen internal tidak tersedia."
         )
-    except Exception as e:
+    except Exception:
         logger.error("Error occurred during chess recommendations calculation", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Terjadi kesalahan internal saat memproses rekomendasi langkah."
         )
 
-# Include the WebSocket router
+
+# Include routers
 app.include_router(ws.router)
-
-class StartGameRequest(BaseModel):
-    playerColor: Literal["white", "black"] = "white"
-
-@app.post("/api/game/start")
-def start_game(request: StartGameRequest):
-    """
-    Endpoint untuk memulai game baru. Menghasilkan session_id unik
-    dan menginisialisasi papan catur di in-memory active_games.
-    """
-    session_id = str(uuid.uuid4())
-    ws.active_games[session_id] = chess.Board()
-    ws.active_game_colors[session_id] = request.playerColor
-    
-    return {
-        "session_id": session_id,
-        "id": session_id,
-        "fen": ws.active_games[session_id].fen(),
-        "playerColor": request.playerColor,
-        "moves": [],
-        "status": "active"
-    }
+app.include_router(game_router.router)
