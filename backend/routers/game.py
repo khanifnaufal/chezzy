@@ -122,3 +122,77 @@ def resign_game(request: ResignRequest, db: DbSession = Depends(get_db)):
         "white_accuracy": round(white_acc, 2),
         "black_accuracy": round(black_acc, 2),
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/games & GET /api/games/{game_id}
+# ---------------------------------------------------------------------------
+
+games_router = APIRouter(prefix="/api/games", tags=["games"])
+
+
+@games_router.get("")
+def list_games(db: DbSession = Depends(get_db)):
+    """
+    List semua game yang tersimpan di database, diurutkan dari yang terbaru.
+    """
+    try:
+        games = db.query(Game).order_by(Game.date.desc()).all()
+        return [
+            {
+                "game_id": g.id,
+                "white": g.white_player,
+                "black": g.black_player,
+                "date": g.date.isoformat() if g.date else None,
+                "result": g.result,
+                "white_accuracy": g.white_accuracy,
+                "black_accuracy": g.black_accuracy,
+            }
+            for g in games
+        ]
+    except Exception as e:
+        logger.error(f"Error listing games: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Gagal mengambil daftar game.")
+
+
+@games_router.get("/{game_id}")
+def get_game_detail(game_id: str, db: DbSession = Depends(get_db)):
+    """
+    Detail satu game beserta daftar moves-nya.
+    """
+    try:
+        game = db.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game tidak ditemukan.")
+
+        from backend.db.models import MoveRecord
+        moves = db.query(MoveRecord).filter(MoveRecord.game_id == game_id).order_by(MoveRecord.id.asc()).all()
+
+        return {
+            "game_id": game.id,
+            "white": game.white_player,
+            "black": game.black_player,
+            "date": game.date.isoformat() if game.date else None,
+            "result": game.result,
+            "white_accuracy": game.white_accuracy,
+            "black_accuracy": game.black_accuracy,
+            "moves": [
+                {
+                    "move_number": m.move_number,
+                    "san": m.san,
+                    "label": m.label,
+                    "score_before": m.score_before,
+                    "score_after": m.score_after,
+                    "explanation": m.explanation,
+                    "is_white": m.is_white,
+                    "uci": m.uci,
+                }
+                for m in moves
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching game detail for {game_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Gagal mengambil detail game.")
+

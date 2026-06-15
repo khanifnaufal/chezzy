@@ -16,10 +16,13 @@ export interface Move {
   explanation: string;
   isWhite: boolean;
   opponent_analysis?: OpponentAnalysis | null;
+  flatIndex?: number;
 }
 
 interface MoveListProps {
   moves: Move[];
+  activeMoveIndex?: number;
+  onMoveClick?: (index: number) => void;
 }
 
 interface MovePair {
@@ -28,36 +31,45 @@ interface MovePair {
   black?: Move;
 }
 
-const MoveList: React.FC<MoveListProps> = ({ moves }) => {
+const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMoveClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const [hoveredMove, setHoveredMove] = useState<Move | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-  // Auto-scroll to the bottom of the list when moves update
+  // Auto-scroll to the active move or bottom when moves/activeMoveIndex changes
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (container) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'smooth'
-      });
+      const activeEl = container.querySelector('[data-active="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      } else {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
     }
-  }, [moves]);
+  }, [moves, activeMoveIndex]);
 
   // Group flat moves array into white/black pairs
   const pairs: MovePair[] = [];
-  moves.forEach((m) => {
+  moves.forEach((m, idx) => {
     let pair = pairs.find((p) => p.moveNumber === m.moveNumber);
     if (!pair) {
       pair = { moveNumber: m.moveNumber };
       pairs.push(pair);
     }
+    const moveWithIndex = { ...m, flatIndex: idx };
     if (m.isWhite) {
-      pair.white = m;
+      pair.white = moveWithIndex;
     } else {
-      pair.black = m;
+      pair.black = moveWithIndex;
     }
   });
 
@@ -153,9 +165,15 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
                   <span
                     onMouseEnter={(e) => handleMouseEnter(e, pair.white!)}
                     onMouseLeave={handleMouseLeave}
-                    className="cursor-help flex items-center gap-1.5 hover:opacity-95 transition"
+                    onClick={() => onMoveClick && onMoveClick(pair.white!.flatIndex!)}
+                    data-active={pair.white.flatIndex === activeMoveIndex ? "true" : undefined}
+                    className={`cursor-pointer flex items-center gap-1.5 hover:bg-slate-800/80 transition-all px-2 py-1 rounded-lg border ${
+                      pair.white.flatIndex === activeMoveIndex
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 shadow-[0_0_8px_rgba(99,102,241,0.2)] font-semibold'
+                        : 'border-transparent text-slate-100 hover:text-white'
+                    }`}
                   >
-                    <span className="font-mono font-semibold text-slate-100">{pair.white.san}</span>
+                    <span className="font-mono font-semibold">{pair.white.san}</span>
                     {renderBadge(pair.white.label)}
                   </span>
                 ) : (
@@ -174,9 +192,15 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
                   <span
                     onMouseEnter={(e) => handleMouseEnter(e, pair.black!)}
                     onMouseLeave={handleMouseLeave}
-                    className="cursor-help flex items-center gap-1.5 hover:opacity-95 transition"
+                    onClick={() => onMoveClick && onMoveClick(pair.black!.flatIndex!)}
+                    data-active={pair.black.flatIndex === activeMoveIndex ? "true" : undefined}
+                    className={`cursor-pointer flex items-center gap-1.5 hover:bg-slate-800/80 transition-all px-2 py-1 rounded-lg border ${
+                      pair.black.flatIndex === activeMoveIndex
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 shadow-[0_0_8px_rgba(99,102,241,0.2)] font-semibold'
+                        : 'border-transparent text-slate-100 hover:text-white'
+                    }`}
                   >
-                    <span className="font-mono font-semibold text-slate-100">{pair.black.san}</span>
+                    <span className="font-mono font-semibold">{pair.black.san}</span>
                     {renderBadge(pair.black.label)}
                   </span>
                 ) : (

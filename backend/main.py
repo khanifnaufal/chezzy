@@ -132,3 +132,5 @@ def get_recommendations(
 # Include routers
 app.include_router(ws.router)
 app.include_router(game_router.router)
+app.include_router(game_router.games_router)
+

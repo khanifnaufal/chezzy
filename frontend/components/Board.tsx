@@ -32,9 +32,10 @@ interface BoardProps {
   }) => void;
   highlightSquares?: string[];
   gameMode?: 'bot' | 'analysis';
+  readOnly?: boolean;
 }
 
-const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot' }, ref) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false }, ref) => {
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -85,7 +86,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
 
   // Establish WebSocket connection
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || readOnly) return;
 
     // Dynamically derive WS URL based on API config (avoid hardcoding port 8000)
     let parsedWsUrl = WS_URL;
@@ -238,7 +239,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
   };
 
   const isDraggablePiece = ({ piece }: { piece: string }): boolean => {
-    if (game.isGameOver()) return false;
+    if (readOnly || game.isGameOver()) return false;
 
     if (gameMode === 'analysis') {
       // In analysis mode, allow moving the piece matching the current turn's color
@@ -288,11 +289,11 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     <div className="w-full max-w-[500px] aspect-square rounded-2xl overflow-hidden shadow-2xl border-4 border-slate-700/50 bg-slate-900">
       <Chessboard
         position={currentFen}
-        onPieceDrop={onPieceDrop}
-        isDraggablePiece={isDraggablePiece}
+        onPieceDrop={readOnly ? () => false : onPieceDrop}
+        isDraggablePiece={readOnly ? () => false : isDraggablePiece}
         boardOrientation={playerColor}
         customSquareStyles={customSquareStyles}
-        arePiecesDraggable={true}
+        arePiecesDraggable={!readOnly}
         animationDuration={200}
         customDarkSquareStyle={{ backgroundColor: '#475569' }} // Tailwind slate-600
         customLightSquareStyle={{ backgroundColor: '#cbd5e1' }} // Tailwind slate-300

@@ -359,18 +359,14 @@ function ChessAnalyzerApp() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center">
-      {/* Navbar */}
-      <header className="w-full border-b border-slate-800 bg-slate-900/60 backdrop-blur-xl px-6 py-4 flex justify-between items-center max-w-7xl">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-indigo-500/20">
-            C
+      {/* Sub-header action bar */}
+      {activeGame && (
+        <div className="w-full max-w-7xl px-6 py-3 flex justify-between items-center bg-slate-900/20 border-b border-slate-800/30">
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-semibold uppercase tracking-wider">
+              {gameMode === 'bot' ? '🤖 VS Bot' : '🔬 Analisis'}
+            </span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
-            Chezzy Chess Analyzer
-          </h1>
-        </div>
-
-        {activeGame && (
           <div className="flex items-center gap-2">
             {/* Resign button */}
             {!isGameEnded && (
@@ -391,8 +387,9 @@ function ChessAnalyzerApp() {
               Mulai Baru
             </button>
           </div>
-        )}
-      </header>
+        </div>
+      )}
+
 
       {/* Main Workspace */}
       <main className="flex-1 w-full max-w-7xl px-4 py-8 flex items-center justify-center">
