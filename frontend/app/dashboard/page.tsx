@@ -87,9 +87,64 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center py-16 text-slate-400">
-        <div className="w-10 h-10 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-        <p className="mt-4 text-sm font-semibold">Menganalisis riwayat game Anda...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center py-8 px-4 sm:px-6">
+        <div className="w-full max-w-7xl flex flex-col gap-8 animate-pulse">
+          {/* Title skeleton */}
+          <div className="space-y-2">
+            <div className="h-8 bg-slate-800 rounded w-1/3" />
+            <div className="h-4 bg-slate-805 rounded w-1/4" />
+          </div>
+
+          {/* Section 1 skeleton: Phase Cards */}
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-6 flex flex-col gap-6">
+            <div className="flex justify-between items-center">
+              <div className="space-y-2 w-1/3">
+                <div className="h-6 bg-slate-800 rounded w-2/3" />
+                <div className="h-4 bg-slate-805 rounded w-1/2" />
+              </div>
+              <div className="h-6 bg-slate-800 rounded w-24" />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-2xl p-5 border border-slate-800 bg-slate-950/40 min-h-[160px] flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-800" />
+                    <div className="h-5 bg-slate-800 rounded w-20" />
+                  </div>
+                  <div className="h-8 bg-slate-800 rounded w-24 mt-4" />
+                  <div className="flex gap-4 mt-4 pt-3 border-t border-slate-800/60">
+                    <div className="h-4 bg-slate-800 rounded w-16" />
+                    <div className="h-4 bg-slate-800 rounded w-16" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex gap-3">
+              <div className="w-6 h-6 rounded bg-slate-800 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-slate-800 rounded w-1/4" />
+                <div className="h-4 bg-slate-805 rounded w-3/4" />
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Grid skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {[1, 2].map((i) => (
+              <div key={i} className="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-6 flex flex-col gap-6 min-h-[420px]">
+                <div className="space-y-2">
+                  <div className="h-6 bg-slate-800 rounded w-1/3" />
+                  <div className="h-4 bg-slate-805 rounded w-1/4" />
+                </div>
+                <div className="flex-1 bg-slate-950/40 rounded-2xl border border-slate-800/60 min-h-[220px] flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 h-14" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -125,7 +180,7 @@ export default function DashboardPage() {
           <div className="w-full bg-slate-950 border border-slate-800/80 rounded-2xl p-5 mt-8 flex flex-col gap-3">
             <div className="flex justify-between items-center text-xs font-bold font-mono text-slate-400">
               <span>PROGRESS GAME</span>
-              <span className="text-indigo-400">{gameCount} / 10 GAME</span>
+              <span className="text-indigo-400">{gameCount}/10 game untuk unlock pattern</span>
             </div>
             <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
               <div

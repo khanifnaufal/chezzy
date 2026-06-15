@@ -124,6 +124,10 @@ function ChessAnalyzerApp() {
   const [showColorModal, setShowColorModal] = useState(false);
   const boardRef = useRef<BoardRef>(null);
 
+  // WebSocket connection status
+  const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'failed' | 'disconnected'>('disconnected');
+  const [wsAttempt, setWsAttempt] = useState<number>(0);
+
   const [lastMoveEvaluation, setLastMoveEvaluation] = useState<{
     san: string;
     label: string;
@@ -237,6 +241,8 @@ function ChessAnalyzerApp() {
       setGameOverEvent(null);
       setIsGameEnded(false);
       setIsResigning(false);
+      setWsStatus('disconnected');
+      setWsAttempt(0);
     } catch (error) {
       console.error('Failed to start game:', error);
       alert('Gagal memulai permainan. Pastikan backend aktif.');
@@ -416,6 +422,24 @@ function ChessAnalyzerApp() {
         ) : (
           /* Active Board Workspace */
           <div className="w-full flex flex-col gap-6 items-center">
+            {/* Connection Status Banners */}
+            {wsStatus === 'reconnecting' && (
+              <div className="w-full max-w-5xl bg-rose-600/95 border border-rose-500 text-white px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg animate-pulse">
+                <span className="text-xl">⚠️</span>
+                <div className="flex-1 text-sm font-bold">
+                  Koneksi terputus, mencoba reconnect... (Percobaan {wsAttempt}/5)
+                </div>
+              </div>
+            )}
+            {wsStatus === 'failed' && (
+              <div className="w-full max-w-5xl bg-rose-700 border border-rose-600 text-white px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg">
+                <span className="text-xl">🚨</span>
+                <div className="flex-1 text-sm font-bold">
+                  Gagal reconnect, refresh halaman
+                </div>
+              </div>
+            )}
+
             {/* Threat warning banner */}
             {activeThreat && !isGameEnded && (
               <div className="w-full max-w-5xl bg-amber-500/10 border border-amber-500/30 text-amber-200 px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg shadow-amber-500/5 animate-fade-in">
@@ -458,6 +482,10 @@ function ChessAnalyzerApp() {
                       highlightSquares={highlightSquares}
                       gameMode={gameMode}
                       ref={boardRef}
+                      onConnectionStatusChange={(status, attempt) => {
+                        setWsStatus(status);
+                        setWsAttempt(attempt);
+                      }}
                     />
                   </div>
                 </div>

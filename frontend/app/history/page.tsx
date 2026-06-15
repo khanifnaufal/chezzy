@@ -268,7 +268,7 @@ export default function HistoryPage() {
             </div>
           ) : games.length === 0 ? (
             <div className="text-center py-16 text-slate-500 text-sm">
-              ♟ Belum ada game yang tersimpan di database. Mulailah bermain di menu Game!
+              Belum ada game. Mulai game pertamamu!
             </div>
           ) : (
             <div className="overflow-x-auto">

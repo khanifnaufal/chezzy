@@ -3,7 +3,7 @@ import uuid
 import logging
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as DbSession
 
 from backend.db.database import get_db
@@ -21,12 +21,34 @@ router = APIRouter(prefix="/api/game", tags=["game"])
 
 class StartGameRequest(BaseModel):
     playerColor: Literal["white", "black"] = "white"
-    whitePlayer: str = "Player"
-    blackPlayer: str = "Bot"
+    whitePlayer: str = Field("Player", min_length=1, max_length=50)
+    blackPlayer: str = Field("Bot", min_length=1, max_length=50)
 
 
 class ResignRequest(BaseModel):
     session_id: str
+
+    @field_validator("session_id")
+    @classmethod
+    def check_uuid(cls, v: str) -> str:
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError("Session ID harus berupa UUID yang valid.")
+        return v
+
+
+class GameIdPath(BaseModel):
+    game_id: str
+
+    @field_validator("game_id")
+    @classmethod
+    def check_uuid(cls, v: str) -> str:
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError("ID Game harus berupa UUID yang valid.")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -39,50 +61,57 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
     Buat session baru, inisialisasi board in-memory, dan simpan record ke DB.
     Returns session_id yang digunakan untuk koneksi WebSocket.
     """
-    session_id = str(uuid.uuid4())
-
-    # Inisialisasi in-memory state (dipakai oleh ws.py)
-    ws_module.active_games[session_id] = chess.Board()
-    ws_module.active_game_colors[session_id] = request.playerColor
-    ws_module.active_move_counts[session_id] = 0
-
-    # Simpan Game record ke DB
-    game_row = Game(
-        id=session_id,
-        white_player=request.whitePlayer if request.playerColor == "white" else request.blackPlayer,
-        black_player=request.blackPlayer if request.playerColor == "white" else request.whitePlayer,
-        result=None,
-    )
-    db.add(game_row)
-
-    # Simpan Session record ke DB
-    session_row = SessionModel(
-        id=session_id,
-        game_id=session_id,
-        player_color=request.playerColor,
-        current_fen=chess.Board().fen(),
-        is_active=True,
-    )
-    db.add(session_row)
-
     try:
-        db.commit()
+        session_id = str(uuid.uuid4())
+
+        # Inisialisasi in-memory state (dipakai oleh ws.py)
+        ws_module.active_games[session_id] = chess.Board()
+        ws_module.active_game_colors[session_id] = request.playerColor
+        ws_module.active_move_counts[session_id] = 0
+
+        # Simpan Game record ke DB
+        game_row = Game(
+            id=session_id,
+            white_player=request.whitePlayer if request.playerColor == "white" else request.blackPlayer,
+            black_player=request.blackPlayer if request.playerColor == "white" else request.whitePlayer,
+            result=None,
+        )
+        db.add(game_row)
+
+        # Simpan Session record ke DB
+        session_row = SessionModel(
+            id=session_id,
+            game_id=session_id,
+            player_color=request.playerColor,
+            current_fen=chess.Board().fen(),
+            is_active=True,
+        )
+        db.add(session_row)
+
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to persist new session to DB: {e}", exc_info=True)
+            # Tetap kembalikan response agar game bisa dimainkan meski DB error
+            # (akan fallback ke in-memory only)
+
+        logger.info(f"New game session created: {session_id} ({request.playerColor})")
+
+        return {
+            "session_id": session_id,
+            "id": session_id,
+            "fen": chess.Board().fen(),
+            "playerColor": request.playerColor,
+            "moves": [],
+            "status": "active",
+        }
     except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to persist new session to DB: {e}", exc_info=True)
-        # Tetap kembalikan response agar game bisa dimainkan meski DB error
-        # (akan fallback ke in-memory only)
-
-    logger.info(f"New game session created: {session_id} ({request.playerColor})")
-
-    return {
-        "session_id": session_id,
-        "id": session_id,
-        "fen": chess.Board().fen(),
-        "playerColor": request.playerColor,
-        "moves": [],
-        "status": "active",
-    }
+        logger.error(f"Error occurred in start_game: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat memulai game baru."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -97,31 +126,40 @@ def resign_game(request: ResignRequest, db: DbSession = Depends(get_db)):
     resign ke board in-memory (jika ws belum menanganinya) dan mengembalikan
     konfirmasi ke klien.
     """
-    session_id = request.session_id
+    try:
+        session_id = request.session_id
 
-    board = ws_module.active_games.get(session_id)
-    player_color = ws_module.active_game_colors.get(session_id)
+        board = ws_module.active_games.get(session_id)
+        player_color = ws_module.active_game_colors.get(session_id)
 
-    if not board or not player_color:
-        raise HTTPException(status_code=404, detail="Session tidak ditemukan atau sudah selesai.")
+        if not board or not player_color:
+            raise HTTPException(status_code=404, detail="Session tidak ditemukan atau sudah selesai.")
 
-    result = "0-1" if player_color == "white" else "1-0"
+        result = "0-1" if player_color == "white" else "1-0"
 
-    # Simpan game ke DB via helper di ws.py
-    ws_module._finish_game(session_id, result, board)
+        # Simpan game ke DB via helper di ws.py
+        ws_module._finish_game(session_id, result, board)
 
-    # Hitung akurasi dari DB
-    from backend.db.models import MoveRecord as MoveRecordModel
-    move_records = db.query(MoveRecordModel).filter(MoveRecordModel.game_id == session_id).all()
-    white_acc, black_acc = ws_module._accuracy_from_moves(move_records)
+        # Hitung akurasi dari DB
+        from backend.db.models import MoveRecord as MoveRecordModel
+        move_records = db.query(MoveRecordModel).filter(MoveRecordModel.game_id == session_id).all()
+        white_acc, black_acc = ws_module._accuracy_from_moves(move_records)
 
-    return {
-        "session_id": session_id,
-        "result": result,
-        "reason": "resign",
-        "white_accuracy": round(white_acc, 2),
-        "black_accuracy": round(black_acc, 2),
-    }
+        return {
+            "session_id": session_id,
+            "result": result,
+            "reason": "resign",
+            "white_accuracy": round(white_acc, 2),
+            "black_accuracy": round(black_acc, 2),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resigning game {request.session_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat memproses resign."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +199,12 @@ def get_game_detail(game_id: str, db: DbSession = Depends(get_db)):
     Detail satu game beserta daftar moves-nya.
     """
     try:
+        # Validate game_id format
+        try:
+            GameIdPath(game_id=game_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
         game = db.query(Game).filter(Game.id == game_id).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game tidak ditemukan.")
@@ -195,4 +239,5 @@ def get_game_detail(game_id: str, db: DbSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error fetching game detail for {game_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Gagal mengambil detail game.")
+
 

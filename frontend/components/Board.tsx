@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } f
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { WS_URL } from '../lib/api';
+import toast from 'react-hot-toast';
 
 export interface BoardRef {
   sendMove: (move: { from: string; to: string; promotion?: string; uci?: string }) => void;
@@ -33,9 +34,13 @@ interface BoardProps {
   highlightSquares?: string[];
   gameMode?: 'bot' | 'analysis';
   readOnly?: boolean;
+  onConnectionStatusChange?: (
+    status: 'connected' | 'reconnecting' | 'failed',
+    attempt: number
+  ) => void;
 }
 
-const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false }, ref) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false, onConnectionStatusChange }, ref) => {
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -84,11 +89,18 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     positionRef.current = position;
   }, [position]);
 
-  // Establish WebSocket connection
+  // Establish WebSocket connection with auto-reconnect
   useEffect(() => {
     if (!sessionId || readOnly) return;
 
-    // Dynamically derive WS URL based on API config (avoid hardcoding port 8000)
+    let ws: WebSocket | null = null;
+    let reconnectTimeoutId: any = null;
+    let currentAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectInterval = 3000;
+    let isIntentionalClose = false;
+
+    // Helper to derive WS URL
     let parsedWsUrl = WS_URL;
     if (parsedWsUrl.startsWith('http://')) {
       parsedWsUrl = parsedWsUrl.replace('http://', 'ws://');
@@ -96,77 +108,132 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
       parsedWsUrl = parsedWsUrl.replace('https://', 'wss://');
     }
     const wsUrl = `${parsedWsUrl}/ws/game/${sessionId}`;
-    
-    console.log(`Connecting to WebSocket: ${wsUrl}`);
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'initial_fen') {
-          console.log('Received initial FEN from WS:', data.fen);
-          const newGame = new Chess(data.fen);
-          setGame(newGame);
-          setCurrentFen(data.fen);
-        } else if (data.type === 'move_result') {
-          console.log('Received move result from WS:', data);
-          const newGame = new Chess(data.current_fen);
-          setGame(newGame);
-          setCurrentFen(data.current_fen);
+    function establishConnection() {
+      if (readOnly || isIntentionalClose) return;
 
-          const history = newGame.history({ verbose: true });
-          if (history.length > 0) {
-            const last = history[history.length - 1];
-            setLastMove({ from: last.from, to: last.to });
-          }
+      console.log(`Connecting to WebSocket: ${wsUrl} (Attempt ${currentAttempts + 1}/${maxReconnectAttempts})`);
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-          if (onMoveResultRef.current) {
-            onMoveResultRef.current(data);
-          }
-        } else if (data.type === 'game_over') {
-          // Forward game_over as a special move result to the parent
-          if (onMoveResultRef.current) {
-            onMoveResultRef.current({
-              san: null,
-              label: null,
-              score_before: null,
-              score_after: null,
-              explanation: null,
-              current_fen: game.fen(),
-              game_over: {
-                result: data.result,
-                reason: data.reason,
-                white_accuracy: data.white_accuracy,
-                black_accuracy: data.black_accuracy,
-              },
-            });
-          }
-        } else if (data.type === 'error') {
-          console.error('WebSocket game error:', data.message);
-          // Revert local state to parent's position on error using positionRef
-          const resetGame = new Chess(positionRef.current);
-          setGame(resetGame);
-          setCurrentFen(positionRef.current);
+      ws.onopen = () => {
+        console.log('WebSocket connection established.');
+        if (currentAttempts > 0) {
+          toast.success("Koneksi tersambung kembali", { id: 'ws-conn-toast' });
         }
-      } catch (e) {
-        console.error('Error handling WS message:', e);
-      }
-    };
+        currentAttempts = 0;
+        if (onConnectionStatusChange) {
+          onConnectionStatusChange('connected', 0);
+        }
+      };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'initial_fen') {
+            console.log('Received initial FEN from WS:', data.fen);
+            const newGame = new Chess(data.fen);
+            setGame(newGame);
+            setCurrentFen(data.fen);
+          } else if (data.type === 'move_result') {
+            console.log('Received move result from WS:', data);
+            const newGame = new Chess(data.current_fen);
+            setGame(newGame);
+            setCurrentFen(data.current_fen);
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-    };
+            const history = newGame.history({ verbose: true });
+            if (history.length > 0) {
+              const last = history[history.length - 1];
+              setLastMove({ from: last.from, to: last.to });
+            }
+
+            if (onMoveResultRef.current) {
+              onMoveResultRef.current(data);
+            }
+          } else if (data.type === 'game_over') {
+            // Toast notification: game saved
+            toast.success("✓ Game tersimpan");
+            
+            // Forward game_over as a special move result to the parent
+            if (onMoveResultRef.current) {
+              onMoveResultRef.current({
+                san: null,
+                label: null,
+                score_before: null,
+                score_after: null,
+                explanation: null,
+                current_fen: game.fen(),
+                game_over: {
+                  result: data.result,
+                  reason: data.reason,
+                  white_accuracy: data.white_accuracy,
+                  black_accuracy: data.black_accuracy,
+                },
+              });
+            }
+          } else if (data.type === 'error') {
+            console.error('WebSocket game error:', data.message);
+            if (data.message === "Illegal move" || data.message === "Illegal move.") {
+              toast.error("✗ Move ilegal");
+            } else {
+              toast.error(`Error: ${data.message}`);
+            }
+
+            // Revert local state to parent's position on error using positionRef
+            const resetGame = new Chess(positionRef.current);
+            setGame(resetGame);
+            setCurrentFen(positionRef.current);
+          }
+        } catch (e) {
+          console.error('Error handling WS message:', e);
+        }
+      };
+
+      ws.onclose = (e) => {
+        console.log(`WebSocket closed: code=${e.code}`);
+        if (isIntentionalClose) return;
+
+        // Trigger disconnect toast
+        if (currentAttempts === 0) {
+          toast.error("Koneksi terputus", { id: 'ws-conn-toast' });
+        }
+
+        if (currentAttempts < maxReconnectAttempts) {
+          const nextAttempt = currentAttempts + 1;
+          currentAttempts = nextAttempt;
+          if (onConnectionStatusChange) {
+            onConnectionStatusChange('reconnecting', nextAttempt);
+          }
+          
+          reconnectTimeoutId = setTimeout(() => {
+            establishConnection();
+          }, reconnectInterval);
+        } else {
+          if (onConnectionStatusChange) {
+            onConnectionStatusChange('failed', currentAttempts);
+          }
+          toast.error("Gagal reconnect, refresh halaman", { id: 'ws-conn-toast', duration: 10000 });
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+      };
+    }
+
+    establishConnection();
 
     return () => {
-      ws.close();
+      isIntentionalClose = true;
+      if (ws) {
+        ws.close();
+      }
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId);
+      }
       wsRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, readOnly]);
 
   // Send a move through WebSocket
   const sendMoveViaWS = (move: { from: string; to: string; promotion?: string; uci?: string }) => {
@@ -221,9 +288,12 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
           uci: from + to + (promotion || '')
         });
         return true;
+      } else {
+        toast.error(" Move ilegal");
       }
     } catch (error) {
       console.warn('Move validation failed locally:', error);
+      toast.error(" Move ilegal");
     }
     return false;
   };

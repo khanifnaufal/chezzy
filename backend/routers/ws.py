@@ -5,6 +5,8 @@ import io
 from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session as DbSession
+from pydantic import BaseModel, Field, field_validator
+from typing import Literal, Optional
 
 from backend.engine.evaluator import get_evaluation, get_top_moves
 from backend.engine.labeler import label_move, get_phase
@@ -20,6 +22,11 @@ from backend.db.models import Game, MoveRecord, Session as SessionModel
 logger = logging.getLogger("chess_analyzer")
 
 router = APIRouter()
+
+# WebSocket incoming message validation schema using Pydantic
+class WSMessage(BaseModel):
+    type: Literal["move", "resign"]
+    uci: Optional[str] = None
 
 # ---------------------------------------------------------------------------
 # CONCURRENCY & MEMORY NOTES:
@@ -167,8 +174,9 @@ def _save_move_to_db(
     is_white: bool,
     phase: str,
     explanation: str,
+    current_fen: str,
 ) -> None:
-    """Persist a single move record (fire-and-forget; errors are logged but not raised)."""
+    """Persist a single move record and update the current FEN in the active session."""
     db = _get_db()
     try:
         record = MoveRecord(
@@ -184,10 +192,16 @@ def _save_move_to_db(
             explanation=explanation,
         )
         db.add(record)
+
+        # Update the active session current_fen
+        session_row = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if session_row:
+            session_row.current_fen = current_fen
+
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to save move to DB for session {session_id}: {e}", exc_info=True)
+        logger.error(f"Failed to save move and update session FEN to DB for session {session_id}: {e}", exc_info=True)
     finally:
         db.close()
 
@@ -237,14 +251,32 @@ async def websocket_game(websocket: WebSocket, session_id: str):
     await websocket.accept()
     logger.info(f"Client connected to WS game session: {session_id}")
 
-    # Validate session exists
-    if session_id not in active_games:
-        logger.warning(f"Rejected WS connection: session {session_id} does not exist.")
-        await websocket.close(code=4003)
-        return
+    # Validate and restore session if it exists in DB (e.g., after server restart)
+    if session_id not in active_games or session_id not in active_game_colors:
+        db = _get_db()
+        try:
+            session_row = db.query(SessionModel).filter(
+                SessionModel.id == session_id,
+                SessionModel.is_active == True
+            ).first()
+            if session_row:
+                active_games[session_id] = chess.Board(session_row.current_fen)
+                active_game_colors[session_id] = session_row.player_color
+                
+                # Reconstruct move count
+                from backend.db.models import MoveRecord as MoveRecordModel
+                move_count = db.query(MoveRecordModel).filter(MoveRecordModel.game_id == session_id).count()
+                active_move_counts[session_id] = move_count
+                
+                logger.info(f"Successfully restored session {session_id} from DB (FEN: {session_row.current_fen}, Color: {session_row.player_color})")
+        except Exception as e:
+            logger.error(f"Failed to restore session {session_id} from DB: {e}", exc_info=True)
+        finally:
+            db.close()
 
-    if session_id not in active_game_colors:
-        logger.warning(f"Rejected WS connection: session {session_id} has no registered player color.")
+    # Re-verify session exists
+    if session_id not in active_games or session_id not in active_game_colors:
+        logger.warning(f"Rejected WS connection: session {session_id} does not exist in memory or DB.")
         await websocket.close(code=4003)
         return
 
@@ -277,10 +309,19 @@ async def websocket_game(websocket: WebSocket, session_id: str):
         while True:
             data = await websocket.receive_json()
 
+            # Pydantic validation for incoming message
+            try:
+                msg = WSMessage(**data)
+            except Exception as e:
+                logger.error(f"WS input validation failed in session {session_id}: {e}")
+                await websocket.send_json({"type": "error", "message": f"Input tidak valid: {str(e)}"})
+                continue
+
             # ----------------------------------------------------------------
             # Handle resign
             # ----------------------------------------------------------------
-            if data.get("type") == "resign":
+            if msg.type == "resign":
+                logger.info(f"Resign request received: session_id={session_id}")
                 result = "0-1" if player_color == "white" else "1-0"
                 _finish_game(session_id, result, board)
                 player_color_val = active_game_colors.get(session_id, "white")
@@ -303,21 +344,26 @@ async def websocket_game(websocket: WebSocket, session_id: str):
             # ----------------------------------------------------------------
             # Handle normal move
             # ----------------------------------------------------------------
-            if data.get("type") != "move":
+            if msg.type != "move":
                 continue
 
-            uci = data.get("uci")
+            uci = msg.uci
             if not uci:
+                logger.error(f"Move message missing UCI field in session {session_id}")
                 await websocket.send_json({"type": "error", "message": "UCI move missing"})
                 continue
 
+            logger.info(f"Incoming move: session_id={session_id}, uci={uci}")
+
             try:
                 move = chess.Move.from_uci(uci)
-            except ValueError:
-                await websocket.send_json({"type": "error", "message": "Invalid UCI format"})
+            except ValueError as e:
+                logger.error(f"Invalid UCI format in session {session_id}: {uci}. Error: {e}")
+                await websocket.send_json({"type": "error", "message": "Format UCI tidak valid"})
                 continue
 
             if move not in board.legal_moves:
+                logger.warning(f"Illegal move attempted in session {session_id}: {uci}")
                 await websocket.send_json({"type": "error", "message": "Illegal move"})
                 continue
 
@@ -375,7 +421,7 @@ async def websocket_game(websocket: WebSocket, session_id: str):
             active_move_counts[session_id] = ply
             move_number = (ply + 1) // 2   # full-move number
 
-            # Persist move to DB (best-effort)
+            # Persist move and update active session FEN to DB (best-effort)
             _save_move_to_db(
                 session_id=session_id,
                 move_number=move_number,
@@ -387,6 +433,7 @@ async def websocket_game(websocket: WebSocket, session_id: str):
                 is_white=is_white,
                 phase=phase,
                 explanation=final_explanation,
+                current_fen=board.fen(),
             )
 
             # Recommendations for next turn
