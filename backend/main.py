@@ -130,7 +130,11 @@ def get_recommendations(
 
 
 # Include routers
+from backend.routers import analysis as analysis_router
+
 app.include_router(ws.router)
 app.include_router(game_router.router)
 app.include_router(game_router.games_router)
+app.include_router(analysis_router.router)
+
 

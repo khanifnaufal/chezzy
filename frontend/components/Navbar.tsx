@@ -10,6 +10,7 @@ export default function Navbar() {
   const links = [
     { href: '/', label: 'Game', icon: '♟' },
     { href: '/history', label: 'History', icon: '📜' },
+    { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   ];
 
   return (
