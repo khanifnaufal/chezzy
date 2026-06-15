@@ -12,6 +12,7 @@ export interface OpponentAnalysis {
 export interface Move {
   moveNumber: number;
   san: string;
+  uci?: string;
   label: string;
   explanation: string;
   isWhite: boolean;

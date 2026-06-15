@@ -140,7 +140,7 @@ function ChessAnalyzerApp() {
   } | null>(null);
 
   // Game mode: 'bot' or 'analysis'
-  const [gameMode, setGameMode] = useState<'bot' | 'analysis'>('bot');
+  const [gameMode, setGameMode] = useState<'bot' | 'analysis'>('analysis');
 
   // Board state
   const [currentFen, setCurrentFen] = useState('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -163,6 +163,13 @@ function ChessAnalyzerApp() {
 
   // Resign loading
   const [isResigning, setIsResigning] = useState(false);
+
+  // Redo stack
+  const [redoStack, setRedoStack] = useState<{ uci: string; promotion?: string }[]>([]);
+
+  useEffect(() => {
+    setRedoStack([]);
+  }, [gameMode]);
 
   // Sync localGame with current FEN
   useEffect(() => {
@@ -193,7 +200,7 @@ function ChessAnalyzerApp() {
             });
           }
         }
-      }, 1000);
+      }, 200);
       return () => clearTimeout(timer);
     }
   }, [currentFen, playerColor, activeGame, gameMode, localGame, isGameEnded]);
@@ -241,6 +248,7 @@ function ChessAnalyzerApp() {
       setGameOverEvent(null);
       setIsGameEnded(false);
       setIsResigning(false);
+      setRedoStack([]);
       setWsStatus('disconnected');
       setWsAttempt(0);
     } catch (error) {
@@ -249,16 +257,17 @@ function ChessAnalyzerApp() {
     }
   };
 
-  const handleResign = async () => {
+  const handleResign = async (color?: 'white' | 'black') => {
     if (!activeGame || isGameEnded || isResigning) return;
     setIsResigning(true);
     try {
+      const targetColor = color || playerColor;
       // Send resign signal via WebSocket (ws.py handles DB save)
       if (boardRef.current) {
-        (boardRef.current as any).sendResign?.();
+        (boardRef.current as any).sendResign?.(targetColor);
       }
       // Also call REST endpoint as fallback / confirmation
-      const data = await resignGame(activeGame.id);
+      const data = await resignGame(activeGame.id, targetColor);
       setIsGameEnded(true);
       setGameOverEvent({
         result: data.result,
@@ -273,6 +282,56 @@ function ChessAnalyzerApp() {
     }
   };
 
+  const canUndo = gameMode === 'bot' ? moves.length >= 2 : moves.length >= 1;
+  const canRedo = redoStack.length > 0;
+
+  const handleUndo = () => {
+    if (!canUndo) return;
+    const undoCount = gameMode === 'bot' ? 2 : 1;
+
+    const movesToUndo = moves.slice(moves.length - undoCount);
+    let redoItems: { uci: string; promotion?: string }[] = [];
+    if (gameMode === 'bot') {
+      const playerMove = movesToUndo.find((m) => m.isWhite === (playerColor === 'white'));
+      if (playerMove && playerMove.uci) {
+        redoItems = [{ uci: playerMove.uci }];
+      }
+    } else {
+      const lastMove = movesToUndo[0];
+      if (lastMove && lastMove.uci) {
+        redoItems = [{ uci: lastMove.uci }];
+      }
+    }
+
+    if (redoItems.length > 0) {
+      setRedoStack((prev) => [...prev, ...redoItems]);
+    }
+
+    if (boardRef.current) {
+      (boardRef.current as any).sendUndo?.(undoCount);
+    }
+  };
+
+  const handleRedo = () => {
+    if (!canRedo) return;
+
+    const nextMove = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, prev.length - 1));
+
+    if (boardRef.current && nextMove) {
+      const from = nextMove.uci.slice(0, 2);
+      const to = nextMove.uci.slice(2, 4);
+      const promotion = nextMove.uci.length === 5 ? nextMove.uci.slice(4, 5) : undefined;
+
+      boardRef.current.sendMove({
+        from,
+        to,
+        promotion,
+        uci: nextMove.uci,
+      });
+    }
+  };
+
   const handleMoveResult = (result: {
     san: string | null;
     label: string | null;
@@ -284,6 +343,9 @@ function ChessAnalyzerApp() {
     opponent_analysis?: any;
     // game_over fields (forwarded from Board)
     game_over?: GameOverEvent;
+    is_undo?: boolean;
+    undone_count?: number;
+    uci?: string;
   }) => {
     setCurrentFen(result.current_fen);
     if (result.score_after !== null && result.score_after !== undefined) {
@@ -312,7 +374,23 @@ function ChessAnalyzerApp() {
       setGameOverEvent(result.game_over);
     }
 
-    if (result.san) {
+    if (result.is_undo) {
+      setIsGameEnded(false);
+      setGameOverEvent(null);
+
+      const count = result.undone_count || 1;
+      setMoves((prev) => prev.slice(0, prev.length - count));
+      
+      if (result.san) {
+        setLastMoveEvaluation({
+          san: result.san,
+          label: result.label || '',
+          explanation: result.explanation || '',
+        });
+      } else {
+        setLastMoveEvaluation(null);
+      }
+    } else if (result.san) {
       setLastMoveEvaluation({
         san: result.san,
         label: result.label || '',
@@ -327,6 +405,7 @@ function ChessAnalyzerApp() {
         const newMove: Move = {
           moveNumber,
           san: result.san!,
+          uci: result.uci || undefined,
           label: result.label || '',
           explanation: result.explanation || '',
           isWhite,
@@ -374,16 +453,25 @@ function ChessAnalyzerApp() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Resign button */}
             {!isGameEnded && (
-              <button
-                id="btn-resign"
-                onClick={handleResign}
-                disabled={isResigning}
-                className="px-4 py-2 text-sm font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/50 transition rounded-xl border border-rose-800/50 hover:border-rose-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isResigning ? 'Menyerah...' : '🏳 Resign'}
-              </button>
+              <>
+                <button
+                  id={playerColor === 'white' ? 'btn-resign-white' : 'btn-resign-black'}
+                  onClick={() => handleResign(playerColor)}
+                  disabled={isResigning}
+                  className="px-4 py-2 text-sm font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/50 transition rounded-xl border border-rose-800/50 hover:border-rose-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isResigning ? 'Menyerah...' : `🏳 Resign ${playerColor === 'white' ? 'Putih' : 'Hitam'}`}
+                </button>
+                <button
+                  id={playerColor === 'white' ? 'btn-resign-black' : 'btn-resign-white'}
+                  onClick={() => handleResign(playerColor === 'white' ? 'black' : 'white')}
+                  disabled={isResigning}
+                  className="px-4 py-2 text-sm font-semibold text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/50 transition rounded-xl border border-emerald-800/50 hover:border-emerald-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isResigning ? 'Menyerah...' : `🏳 Resign ${playerColor === 'white' ? 'Hitam' : 'Putih'}`}
+                </button>
+              </>
             )}
             <button
               id="btn-new-game-header"
@@ -481,6 +569,7 @@ function ChessAnalyzerApp() {
                       onMoveResult={handleMoveResult}
                       highlightSquares={highlightSquares}
                       gameMode={gameMode}
+                      onNewMove={() => setRedoStack([])}
                       ref={boardRef}
                       onConnectionStatusChange={(status, attempt) => {
                         setWsStatus(status);
@@ -531,6 +620,26 @@ function ChessAnalyzerApp() {
                         Solo Analisis
                       </button>
                     </div>
+                  </div>
+
+                  {/* Undo / Redo controls */}
+                  <div className="flex gap-2 w-full border-b border-slate-800 pb-3">
+                    <button
+                      id="btn-undo"
+                      onClick={handleUndo}
+                      disabled={!canUndo}
+                      className="flex-1 py-2 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-slate-100 hover:border-slate-700"
+                    >
+                      ↶ Undo
+                    </button>
+                    <button
+                      id="btn-redo"
+                      onClick={handleRedo}
+                      disabled={!canRedo}
+                      className="flex-1 py-2 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-slate-100 hover:border-slate-700"
+                    >
+                      Redo ↷
+                    </button>
                   </div>
 
                   {/* Last Move Evaluation */}

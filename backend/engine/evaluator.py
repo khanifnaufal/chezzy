@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Optional
 import chess
 import chess.engine
 from backend.config import STOCKFISH_PATH
@@ -59,7 +60,7 @@ def get_engine() -> chess.engine.SimpleEngine:
     except Exception as e:
         raise RuntimeError(f"Error starting Stockfish engine: {str(e)}")
 
-def get_evaluation(fen: str, depth: int = 15, timeout: float = 10.0) -> int:
+def get_evaluation(fen: str, depth: int = 15, timeout: float = 10.0, engine: Optional[chess.engine.SimpleEngine] = None) -> int:
     """
     Mengembalikan nilai evaluasi centipawn (relatif terhadap White).
     Menggunakan limit waktu pencarian (timeout) untuk mencegah hang.
@@ -67,7 +68,7 @@ def get_evaluation(fen: str, depth: int = 15, timeout: float = 10.0) -> int:
     engine_breaker.check_state()
     board = chess.Board(fen)
     try:
-        with get_engine() as engine:
+        if engine is not None:
             # Tetapkan limit berdasarkan depth dan timeout
             limit = chess.engine.Limit(time=timeout, depth=depth)
             info = engine.analyse(board, limit)
@@ -78,11 +79,23 @@ def get_evaluation(fen: str, depth: int = 15, timeout: float = 10.0) -> int:
             
             engine_breaker.record_success()
             return score
+        else:
+            with get_engine() as spawned_engine:
+                # Tetapkan limit berdasarkan depth dan timeout
+                limit = chess.engine.Limit(time=timeout, depth=depth)
+                info = spawned_engine.analyse(board, limit)
+                
+                # Mendapatkan skor dari sudut pandang White
+                white_score = info["score"].white()
+                score = white_score.score(mate_score=10000)
+                
+                engine_breaker.record_success()
+                return score
     except Exception as e:
         engine_breaker.record_failure()
         raise e
 
-def get_top_moves(fen: str, n: int = 3, depth: int = 15, timeout: float = 10.0) -> list:
+def get_top_moves(fen: str, n: int = 3, depth: int = 15, timeout: float = 10.0, engine: Optional[chess.engine.SimpleEngine] = None) -> list:
     """
     Mengembalikan daftar top n moves beserta informasi uci, san, score, dan mate_in.
     Menggunakan limit waktu pencarian (timeout) untuk mencegah hang.
@@ -90,7 +103,7 @@ def get_top_moves(fen: str, n: int = 3, depth: int = 15, timeout: float = 10.0) 
     engine_breaker.check_state()
     board = chess.Board(fen)
     try:
-        with get_engine() as engine:
+        if engine is not None:
             # Tetapkan limit berdasarkan depth dan timeout
             limit = chess.engine.Limit(time=timeout, depth=depth)
             info = engine.analyse(board, limit, multipv=n)
@@ -117,6 +130,34 @@ def get_top_moves(fen: str, n: int = 3, depth: int = 15, timeout: float = 10.0) 
                 
             engine_breaker.record_success()
             return top_moves
+        else:
+            with get_engine() as spawned_engine:
+                # Tetapkan limit berdasarkan depth dan timeout
+                limit = chess.engine.Limit(time=timeout, depth=depth)
+                info = spawned_engine.analyse(board, limit, multipv=n)
+                
+                top_moves = []
+                for entry in info:
+                    if "pv" not in entry or not entry["pv"]:
+                        continue
+                    
+                    move = entry["pv"][0]
+                    move_uci = move.uci()
+                    move_san = board.san(move)
+                    
+                    pov_score = entry["score"].white()
+                    score = pov_score.score(mate_score=10000)
+                    mate_in = pov_score.mate()
+                    
+                    top_moves.append({
+                        "move_uci": move_uci,
+                        "move_san": move_san,
+                        "score": score,
+                        "mate_in": mate_in
+                    })
+                    
+                engine_breaker.record_success()
+                return top_moves
     except Exception as e:
         engine_breaker.record_failure()
         raise e

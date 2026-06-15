@@ -1,4 +1,6 @@
 import chess
+from typing import Optional
+import chess.engine
 from backend.engine.evaluator import get_top_moves
 from backend.engine.labeler import get_phase
 
@@ -140,13 +142,13 @@ def generate_explanation_and_risk(h: dict) -> tuple[str, str]:
             
     return explanation, risk
 
-def recommend_moves(fen: str, is_white: bool) -> list:
+def recommend_moves(fen: str, is_white: bool, engine: Optional[chess.engine.SimpleEngine] = None) -> list:
     """
     Mengambil top 3 langkah terbaik dari evaluator, kemudian menambahkan analisis tipe langkah,
     penjelasan heuristik (Indonesian), risiko, dan flag is_best.
     """
     # Ambil 3 pilihan langkah terbaik dari Stockfish (depth=15)
-    top_moves = get_top_moves(fen, n=3, depth=15)
+    top_moves = get_top_moves(fen, n=3, depth=15, engine=engine)
     
     board = chess.Board(fen)
     move_number = board.fullmove_number

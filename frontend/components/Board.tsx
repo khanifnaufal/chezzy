@@ -8,7 +8,8 @@ import toast from 'react-hot-toast';
 
 export interface BoardRef {
   sendMove: (move: { from: string; to: string; promotion?: string; uci?: string }) => void;
-  sendResign: () => void;
+  sendResign: (color?: 'white' | 'black') => void;
+  sendUndo: (count: number) => void;
 }
 
 interface BoardProps {
@@ -38,9 +39,10 @@ interface BoardProps {
     status: 'connected' | 'reconnecting' | 'failed',
     attempt: number
   ) => void;
+  onNewMove?: () => void;
 }
 
-const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false, onConnectionStatusChange }, ref) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false, onConnectionStatusChange, onNewMove }, ref) => {
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -135,6 +137,37 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
             const newGame = new Chess(data.fen);
             setGame(newGame);
             setCurrentFen(data.fen);
+          } else if (data.type === 'undo_result') {
+            console.log('Received undo result from WS:', data);
+            const newGame = new Chess(data.current_fen);
+            setGame(newGame);
+            setCurrentFen(data.current_fen);
+
+            const history = newGame.history({ verbose: true });
+            if (history.length > 0) {
+              const last = history[history.length - 1];
+              setLastMove({ from: last.from, to: last.to });
+            } else {
+              setLastMove(null);
+            }
+
+            if (onMoveResultRef.current) {
+              onMoveResultRef.current({
+                san: data.last_move_evaluation ? data.last_move_evaluation.san : null,
+                label: data.last_move_evaluation ? data.last_move_evaluation.label : null,
+                score_before: null,
+                score_after: data.score,
+                explanation: data.last_move_evaluation ? data.last_move_evaluation.explanation : null,
+                current_fen: data.current_fen,
+                recommendations: data.recommendations,
+                opponent_analysis: data.active_threat ? {
+                  threat: data.active_threat.threat,
+                  best_response: data.active_threat.best_response,
+                } : null,
+                is_undo: true,
+                undone_count: data.undone_count
+              } as any);
+            }
           } else if (data.type === 'move_result') {
             console.log('Received move result from WS:', data);
             const newGame = new Chess(data.current_fen);
@@ -253,18 +286,32 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     }
   };
 
-  const sendResignViaWS = () => {
+  const sendResignViaWS = (color?: 'white' | 'black') => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'resign' }));
+      ws.send(JSON.stringify({ type: 'resign', color }));
     } else {
       console.warn('WebSocket is not open. Cannot send resign.');
+    }
+  };
+
+  const sendUndoViaWS = (count: number) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log('Sending undo via WS, count:', count);
+      ws.send(JSON.stringify({
+        type: 'undo',
+        count: count
+      }));
+    } else {
+      console.warn('WebSocket is not open. Cannot send undo.');
     }
   };
 
   useImperativeHandle(ref, () => ({
     sendMove: sendMoveViaWS,
     sendResign: sendResignViaWS,
+    sendUndo: sendUndoViaWS,
   }));
 
   // Handle move validation and execution (local test and WS request)
@@ -287,6 +334,9 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
           promotion,
           uci: from + to + (promotion || '')
         });
+        if (onNewMove) {
+          onNewMove();
+        }
         return true;
       } else {
         toast.error(" Move ilegal");
@@ -312,9 +362,8 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     if (readOnly || game.isGameOver()) return false;
 
     if (gameMode === 'analysis') {
-      // In analysis mode, allow moving the piece matching the current turn's color
-      const currentTurnPiecePrefix = game.turn(); // 'w' or 'b'
-      return piece.startsWith(currentTurnPiecePrefix);
+      // In analysis mode, allow dragging any piece (rules validation is handled on drop)
+      return true;
     } else {
       // In bot mode, only allow the player to drag their own pieces on their turn
       const isCorrectColor =
@@ -364,7 +413,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
         boardOrientation={playerColor}
         customSquareStyles={customSquareStyles}
         arePiecesDraggable={!readOnly}
-        animationDuration={200}
+        animationDuration={100}
         customDarkSquareStyle={{ backgroundColor: '#475569' }} // Tailwind slate-600
         customLightSquareStyle={{ backgroundColor: '#cbd5e1' }} // Tailwind slate-300
       />

@@ -1,7 +1,7 @@
 import chess
 import uuid
 import logging
-from typing import Literal
+from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as DbSession
@@ -27,6 +27,7 @@ class StartGameRequest(BaseModel):
 
 class ResignRequest(BaseModel):
     session_id: str
+    color: Optional[Literal["white", "black"]] = None
 
     @field_validator("session_id")
     @classmethod
@@ -135,7 +136,8 @@ def resign_game(request: ResignRequest, db: DbSession = Depends(get_db)):
         if not board or not player_color:
             raise HTTPException(status_code=404, detail="Session tidak ditemukan atau sudah selesai.")
 
-        result = "0-1" if player_color == "white" else "1-0"
+        resign_color = request.color or player_color
+        result = "0-1" if resign_color == "white" else "1-0"
 
         # Simpan game ke DB via helper di ws.py
         ws_module._finish_game(session_id, result, board)
