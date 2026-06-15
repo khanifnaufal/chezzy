@@ -63,6 +63,9 @@ export default function HistoryPage() {
           } catch (e) {
             console.warn(`Failed to play move: ${m.san || m.uci}`, e);
             try {
+              if (!m.uci || typeof m.uci !== 'string' || m.uci.length < 4) {
+                throw new Error("UCI string is malformed or undefined");
+              }
               // Try making move by parsing UCI (from -> to)
               const from = m.uci.slice(0, 2);
               const to = m.uci.slice(2, 4);
@@ -70,8 +73,8 @@ export default function HistoryPage() {
               chess.move({ from, to, promotion });
               calculatedFens.push(chess.fen());
             } catch (err) {
-              // Push last valid FEN as fallback
-              calculatedFens.push(chess.fen());
+              // Push undefined to indicate failure/gap
+              calculatedFens.push(undefined as any);
             }
           }
         }
@@ -402,7 +405,7 @@ export default function HistoryPage() {
                       <EvalBar score={getCurrentScore()} />
                       <div className="flex-1 min-w-0 aspect-square">
                         <Board
-                          position={fens[currentMoveIndex + 1] || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
+                          position={(currentMoveIndex + 1 >= 0 && currentMoveIndex + 1 < fens.length && fens[currentMoveIndex + 1]) || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
                           playerColor="white"
                           readOnly={true}
                         />
