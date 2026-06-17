@@ -348,14 +348,34 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     return false;
   };
 
-  const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string): boolean => {
-    // Detect promotion: pawn moving to the end rank
-    const pieceObj = game.get(sourceSquare as any);
-    const isPawn = pieceObj && pieceObj.type === 'p';
-    const isEndRow = targetSquare[1] === '8' || targetSquare[1] === '1';
-    const promotion = isPawn && isEndRow ? 'q' : undefined;
+  const onPromotionCheck = (sourceSquare: string, targetSquare: string): boolean => {
+    const tempGame = new Chess(game.fen());
+    const validMoves = tempGame.moves({ verbose: true });
+    return validMoves.some(
+      (move) => move.from === sourceSquare && move.to === targetSquare && move.promotion
+    );
+  };
 
-    return makeAMove(sourceSquare, targetSquare, promotion);
+  const onPromotionPieceSelect = (piece?: string, promoteFromSquare?: string, promoteToSquare?: string): boolean => {
+    if (!piece || !promoteFromSquare || !promoteToSquare) return false;
+    const promotion = piece.toLowerCase().charAt(piece.length - 1);
+    return makeAMove(promoteFromSquare, promoteToSquare, promotion);
+  };
+
+  const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string): boolean => {
+    // Check if this move is a promotion. If so, skip local normal move execution
+    // and let react-chessboard trigger the promotion check/selection flow.
+    const tempGame = new Chess(game.fen());
+    const validMoves = tempGame.moves({ verbose: true });
+    const isPromotion = validMoves.some(
+      (move) => move.from === sourceSquare && move.to === targetSquare && move.promotion
+    );
+    if (isPromotion) {
+      return true;
+    }
+
+    // Normal moves only (promotions are handled by onPromotionCheck/onPromotionPieceSelect)
+    return makeAMove(sourceSquare, targetSquare);
   };
 
   const isDraggablePiece = ({ piece }: { piece: string }): boolean => {
@@ -405,10 +425,12 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
   };
 
   return (
-    <div className="w-full max-w-[500px] aspect-square rounded-2xl overflow-hidden shadow-2xl border-4 border-slate-700/50 bg-slate-900">
+    <div className="w-full max-w-[500px] aspect-square rounded-2xl shadow-2xl border-4 border-slate-700/50 bg-slate-900">
       <Chessboard
         position={currentFen}
         onPieceDrop={readOnly ? () => false : onPieceDrop}
+        onPromotionCheck={readOnly ? () => false : onPromotionCheck}
+        onPromotionPieceSelect={readOnly ? () => false : onPromotionPieceSelect}
         isDraggablePiece={readOnly ? () => false : isDraggablePiece}
         boardOrientation={playerColor}
         customSquareStyles={customSquareStyles}
@@ -416,6 +438,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
         animationDuration={100}
         customDarkSquareStyle={{ backgroundColor: '#475569' }} // Tailwind slate-600
         customLightSquareStyle={{ backgroundColor: '#cbd5e1' }} // Tailwind slate-300
+        customBoardStyle={{ borderRadius: '12px' }}
       />
     </div>
   );
