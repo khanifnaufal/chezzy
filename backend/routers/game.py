@@ -23,6 +23,7 @@ class StartGameRequest(BaseModel):
     playerColor: Literal["white", "black"] = "white"
     whitePlayer: str = Field("Player", min_length=1, max_length=50)
     blackPlayer: str = Field("Bot", min_length=1, max_length=50)
+    fen: Optional[str] = None
 
 
 class ResignRequest(BaseModel):
@@ -65,8 +66,15 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
     try:
         session_id = str(uuid.uuid4())
 
+        start_board = chess.Board()
+        if request.fen:
+            try:
+                start_board = chess.Board(request.fen)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Format FEN tidak valid.")
+
         # Inisialisasi in-memory state (dipakai oleh ws.py)
-        ws_module.active_games[session_id] = chess.Board()
+        ws_module.active_games[session_id] = start_board
         ws_module.active_game_colors[session_id] = request.playerColor
         ws_module.active_move_counts[session_id] = 0
 
@@ -84,7 +92,7 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
             id=session_id,
             game_id=session_id,
             player_color=request.playerColor,
-            current_fen=chess.Board().fen(),
+            current_fen=start_board.fen(),
             is_active=True,
         )
         db.add(session_row)
@@ -102,11 +110,13 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
         return {
             "session_id": session_id,
             "id": session_id,
-            "fen": chess.Board().fen(),
+            "fen": start_board.fen(),
             "playerColor": request.playerColor,
             "moves": [],
             "status": "active",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error occurred in start_game: {e}", exc_info=True)
         raise HTTPException(

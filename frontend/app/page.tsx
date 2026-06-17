@@ -6,6 +6,7 @@ import Board, { BoardRef } from '../components/Board';
 import EvalBar from '../components/EvalBar';
 import MoveList, { Move } from '../components/MoveList';
 import RecommendPanel from '../components/RecommendPanel';
+import PositionSetup from '../components/PositionSetup';
 import { startGame, resignGame } from '../lib/api';
 import { Recommendation, Game, GameOverEvent } from '../lib/types';
 import { Chess } from 'chess.js';
@@ -122,7 +123,7 @@ function ChessAnalyzerApp() {
   const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white');
   const [currentScore, setCurrentScore] = useState<number>(0);
   const [showColorModal, setShowColorModal] = useState(false);
-  const [modalStep, setModalStep] = useState<'mode' | 'side'>('mode');
+  const [modalStep, setModalStep] = useState<'mode' | 'side' | 'analysis_setup' | 'position_setup'>('mode');
   const boardRef = useRef<BoardRef>(null);
 
   const openNewGameModal = () => {
@@ -235,21 +236,26 @@ function ChessAnalyzerApp() {
     }
   }, [currentFen, playerColor, activeGame]);
 
-  const handleStartNewGame = async (color: 'white' | 'black') => {
+  const handleStartNewGame = async (color: 'white' | 'black', customFen?: string) => {
     try {
-      const gameData = await startGame(color);
+      const gameData = await startGame(color, customFen);
       setShowColorModal(false);
       setActiveGame(gameData);
       setPlayerColor(color);
-      setCurrentFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      const startingFen = customFen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      setCurrentFen(startingFen);
       setMoves([]);
-      setLocalGame(new Chess());
+      setLocalGame(new Chess(startingFen));
       setLastMoveEvaluation(null);
       setActiveThreat(null);
       setCurrentScore(0);
       setRecommendations([]);
       setHighlightSquares([]);
-      setIsRecommendLoading(color === 'white');
+      
+      const tempChess = new Chess(startingFen);
+      const isPlayerTurn = tempChess.turn() === color[0];
+      setIsRecommendLoading(isPlayerTurn);
+      
       recommendationsFenRef.current = null;
       setGameOverEvent(null);
       setIsGameEnded(false);
@@ -694,7 +700,9 @@ function ChessAnalyzerApp() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-6 shadow-2xl relative animate-scale-up cursor-default"
+            className={`bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full flex flex-col gap-6 shadow-2xl relative animate-scale-up cursor-default transition-all duration-200 ${
+              modalStep === 'position_setup' ? 'max-w-md' : 'max-w-sm'
+            }`}
           >
             {modalStep === 'mode' ? (
               <>
@@ -720,7 +728,7 @@ function ChessAnalyzerApp() {
                     id="btn-choose-analysis"
                     onClick={() => {
                       setGameMode('analysis');
-                      setModalStep('side');
+                      setModalStep('analysis_setup');
                     }}
                     className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left"
                   >
@@ -740,6 +748,61 @@ function ChessAnalyzerApp() {
                   Batal
                 </button>
               </>
+            ) : modalStep === 'analysis_setup' ? (
+              <>
+                <h3 className="text-lg font-bold text-center text-slate-200">Setup Solo Analisis</h3>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <button
+                    id="btn-choose-start-pos"
+                    onClick={() => {
+                      setModalStep('side');
+                    }}
+                    className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left"
+                  >
+                    <span className="text-4xl group-hover:scale-110 transition duration-150">🏁</span>
+                    <div>
+                      <span className="block text-sm font-semibold text-slate-200">Mulai dari posisi awal</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Mulai permainan catur standar dari posisi awal.</span>
+                    </div>
+                  </button>
+
+                  <button
+                    id="btn-choose-manual-setup"
+                    onClick={() => {
+                      setModalStep('position_setup');
+                    }}
+                    className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left"
+                  >
+                    <span className="text-4xl group-hover:scale-110 transition duration-150">⚙️</span>
+                    <div>
+                      <span className="block text-sm font-semibold text-slate-200">Setup posisi manual</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Masukkan posisi kustom via string FEN.</span>
+                    </div>
+                  </button>
+                </div>
+
+                <button
+                  id="btn-analysis-setup-back"
+                  onClick={() => setModalStep('mode')}
+                  className="py-2.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 rounded-xl text-center border border-slate-800"
+                >
+                  Kembali
+                </button>
+              </>
+            ) : modalStep === 'position_setup' ? (
+              <PositionSetup
+                onLoadPosition={(fen) => {
+                  try {
+                    const chess = new Chess(fen);
+                    const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+                    handleStartNewGame(turnColor, fen);
+                  } catch (e) {
+                    console.error('Invalid FEN loaded:', e);
+                  }
+                }}
+                onBack={() => setModalStep('analysis_setup')}
+              />
             ) : (
               <>
                 <h3 className="text-lg font-bold text-center text-slate-200">Pilih Warna Anda</h3>
@@ -766,7 +829,13 @@ function ChessAnalyzerApp() {
 
                 <button
                   id="btn-modal-back"
-                  onClick={() => setModalStep('mode')}
+                  onClick={() => {
+                    if (gameMode === 'analysis') {
+                      setModalStep('analysis_setup');
+                    } else {
+                      setModalStep('mode');
+                    }
+                  }}
                   className="py-2.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 rounded-xl text-center border border-slate-800"
                 >
                   Kembali
