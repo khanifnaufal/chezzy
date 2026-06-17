@@ -181,6 +181,7 @@ app.include_router(ws.router)
 app.include_router(game_router.router)
 app.include_router(game_router.games_router)
 app.include_router(game_router.hint_router)
+app.include_router(game_router.practice_router)
 app.include_router(analysis_router.router)
 
 

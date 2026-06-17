@@ -8,6 +8,7 @@ import MoveList, { Move } from '../components/MoveList';
 import RecommendPanel from '../components/RecommendPanel';
 import PositionSetup from '../components/PositionSetup';
 import HintPanel from '../components/HintPanel';
+import BlunderPracticeSetup, { BlunderPosition } from '../components/BlunderPracticeSetup';
 import { startGame, resignGame } from '../lib/api';
 import { Recommendation, Game, GameOverEvent } from '../lib/types';
 import { Chess } from 'chess.js';
@@ -124,12 +125,16 @@ function ChessAnalyzerApp() {
   const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white');
   const [currentScore, setCurrentScore] = useState<number>(0);
   const [showColorModal, setShowColorModal] = useState(false);
-  const [modalStep, setModalStep] = useState<'mode' | 'side' | 'analysis_setup' | 'position_setup'>('mode');
+  const [modalStep, setModalStep] = useState<'mode' | 'side' | 'analysis_setup' | 'position_setup' | 'blunder_practice'>('mode');
+  const [practiceBlunder, setPracticeBlunder] = useState<BlunderPosition | null>(null);
+  const [practiceFeedback, setPracticeFeedback] = useState<{ status: 'success' | 'fail'; message: string } | null>(null);
   const boardRef = useRef<BoardRef>(null);
 
   const openNewGameModal = () => {
     setModalStep('mode');
     setShowColorModal(true);
+    setPracticeBlunder(null);
+    setPracticeFeedback(null);
   };
 
   // WebSocket connection status
@@ -264,6 +269,7 @@ function ChessAnalyzerApp() {
       setRedoStack([]);
       setWsStatus('disconnected');
       setWsAttempt(0);
+      setPracticeFeedback(null);
     } catch (error) {
       console.error('Failed to start game:', error);
       alert('Gagal memulai permainan. Pastikan backend aktif.');
@@ -345,6 +351,30 @@ function ChessAnalyzerApp() {
     }
   };
 
+  const isMoveBetter = (
+    newScore: number | null | undefined,
+    newLabel: string | null | undefined,
+    originalScore: number | null | undefined,
+    originalLabel: string | null | undefined,
+    isWhite: boolean
+  ): boolean => {
+    if (newScore !== null && newScore !== undefined && originalScore !== null && originalScore !== undefined) {
+      return isWhite ? (newScore > originalScore) : (newScore < originalScore);
+    }
+    const labelValues: Record<string, number> = {
+      'Brilliant': 5,
+      'Excellent': 4,
+      'Good': 3,
+      'Inaccuracy': 2,
+      'Mistake': 1,
+      'Blunder': 0,
+      'Unknown': 0,
+    };
+    const newVal = labelValues[newLabel || ''] ?? 0;
+    const origVal = labelValues[originalLabel || ''] ?? 0;
+    return newVal > origVal;
+  };
+
   const handleMoveResult = (result: {
     san: string | null;
     label: string | null;
@@ -390,6 +420,7 @@ function ChessAnalyzerApp() {
     if (result.is_undo) {
       setIsGameEnded(false);
       setGameOverEvent(null);
+      setPracticeFeedback(null);
 
       const count = result.undone_count || 1;
       setMoves((prev) => prev.slice(0, prev.length - count));
@@ -404,6 +435,32 @@ function ChessAnalyzerApp() {
         setLastMoveEvaluation(null);
       }
     } else if (result.san) {
+      if (practiceBlunder && moves.length === 0) {
+        const isWhite = playerColor === 'white';
+        const originalScore = practiceBlunder.score_after;
+        const newScore = result.score_after;
+
+        const isBetter = isMoveBetter(
+          newScore,
+          result.label,
+          originalScore,
+          practiceBlunder.label,
+          isWhite
+        );
+
+        if (isBetter) {
+          setPracticeFeedback({
+            status: 'success',
+            message: '✓ Lebih baik dari sebelumnya!'
+          });
+        } else {
+          setPracticeFeedback({
+            status: 'fail',
+            message: 'Masih kurang optimal, coba lagi'
+          });
+        }
+      }
+
       setLastMoveEvaluation({
         san: result.san,
         label: result.label || '',
@@ -609,6 +666,25 @@ function ChessAnalyzerApp() {
               {/* Column 3: Sidebar */}
               <div className="flex-1 w-full lg:max-w-[450px] flex flex-col gap-6">
 
+                {/* Blunder Practice Feedback Banner */}
+                {practiceFeedback && (
+                  <div className={`p-5 rounded-2xl border backdrop-blur-xl animate-fade-in flex flex-col gap-2 ${
+                    practiceFeedback.status === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                  }`}>
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      <span className="text-lg">{practiceFeedback.status === 'success' ? '🏆' : '❌'}</span>
+                      <span>{practiceFeedback.message}</span>
+                    </div>
+                    {practiceFeedback.status === 'fail' && (
+                      <p className="text-xs text-rose-300/80">
+                        Langkah Anda kurang optimal dibandingkan langkah asal. Klik <span className="underline cursor-pointer font-bold hover:text-rose-100 transition" onClick={handleUndo}>Undo</span> untuk membatalkan langkah dan mencoba mencari langkah lain.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Status & Controls Panel */}
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -710,7 +786,7 @@ function ChessAnalyzerApp() {
           <div
             onClick={(e) => e.stopPropagation()}
             className={`bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full flex flex-col gap-6 shadow-2xl relative animate-scale-up cursor-default transition-all duration-200 ${
-              modalStep === 'position_setup' ? 'max-w-md' : 'max-w-sm'
+              modalStep === 'position_setup' || modalStep === 'blunder_practice' ? 'max-w-md' : 'max-w-sm'
             }`}
           >
             {modalStep === 'mode' ? (
@@ -789,6 +865,20 @@ function ChessAnalyzerApp() {
                       <span className="block text-xs text-slate-400 mt-0.5">Masukkan posisi kustom via string FEN.</span>
                     </div>
                   </button>
+
+                  <button
+                    id="btn-choose-blunder-practice"
+                    onClick={() => {
+                      setModalStep('blunder_practice');
+                    }}
+                    className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left"
+                  >
+                    <span className="text-4xl group-hover:scale-110 transition duration-150">🧠</span>
+                    <div>
+                      <span className="block text-sm font-semibold text-slate-200">Latihan dari Blunder Kamu</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Latih kemampuan Anda dari kesalahan langkah di game sebelumnya.</span>
+                    </div>
+                  </button>
                 </div>
 
                 <button
@@ -803,6 +893,22 @@ function ChessAnalyzerApp() {
               <PositionSetup
                 onLoadPosition={(fen) => {
                   try {
+                    const chess = new Chess(fen);
+                    const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+                    handleStartNewGame(turnColor, fen);
+                  } catch (e) {
+                    console.error('Invalid FEN loaded:', e);
+                  }
+                }}
+                onBack={() => setModalStep('analysis_setup')}
+              />
+            ) : modalStep === 'blunder_practice' ? (
+              <BlunderPracticeSetup
+                onLoadPosition={(fen, blunder) => {
+                  try {
+                    setGameMode('analysis');
+                    setPracticeBlunder(blunder);
+                    setPracticeFeedback(null);
                     const chess = new Chess(fen);
                     const turnColor = chess.turn() === 'w' ? 'white' : 'black';
                     handleStartNewGame(turnColor, fen);

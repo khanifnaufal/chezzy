@@ -1,13 +1,15 @@
 import chess
+import chess.pgn
 import uuid
 import logging
 from typing import Literal, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as DbSession
 
 from backend.db.database import get_db
-from backend.db.models import Game, Session as SessionModel
+from backend.db.models import Game, Session as SessionModel, MoveRecord
 from backend.routers import ws as ws_module
 
 logger = logging.getLogger("chess_analyzer")
@@ -292,6 +294,105 @@ def get_hint(request: HintRequest):
             status_code=500,
             detail="Terjadi kesalahan internal saat membuat petunjuk (hint)."
         )
+
+
+def get_fen_before_move(db: DbSession, game: Game, target_move: MoveRecord) -> str:
+    if not game:
+        return chess.STARTING_FEN
+    if game.pgn_raw:
+        try:
+            import io
+            pgn_io = io.StringIO(game.pgn_raw)
+            pgn_game = chess.pgn.read_game(pgn_io)
+            if pgn_game:
+                board = pgn_game.board()
+                for move in pgn_game.mainline_moves():
+                    is_turn_white = board.turn == chess.WHITE
+                    if (is_turn_white == target_move.is_white and 
+                        board.fullmove_number == target_move.move_number and 
+                        move.uci() == target_move.uci):
+                        return board.fen()
+                    board.push(move)
+        except Exception as e:
+            logger.error(f"Error parsing pgn_raw for FEN: {e}")
+
+    # 2. Fallback using active_games in memory if it's currently being played
+    from backend.routers import ws as ws_module
+    if game.id in ws_module.active_games:
+        try:
+            board_copy = ws_module.active_games[game.id].copy()
+            while len(board_copy.move_stack) > 0:
+                last_move = board_copy.move_stack[-1]
+                board_copy.pop()
+                is_turn_white = board_copy.turn == chess.WHITE
+                if (is_turn_white == target_move.is_white and 
+                    board_copy.fullmove_number == target_move.move_number and 
+                    last_move.uci() == target_move.uci):
+                    return board_copy.fen()
+        except Exception as e:
+            logger.error(f"Error extracting FEN from active board copy: {e}")
+
+    # 3. Final fallback: play moves from standard starting board
+    try:
+        moves = db.query(MoveRecord).filter(MoveRecord.game_id == game.id).order_by(MoveRecord.id.asc()).all()
+        board = chess.Board()
+        for m in moves:
+            if m.id == target_move.id or (m.move_number == target_move.move_number and m.is_white == target_move.is_white):
+                return board.fen()
+            try:
+                board.push_san(m.san)
+            except Exception:
+                try:
+                    board.push_uci(m.uci)
+                except Exception:
+                    pass
+        return board.fen()
+    except Exception as e:
+        logger.error(f"Error in final fallback get_fen_before_move: {e}")
+        return chess.STARTING_FEN
+
+
+practice_router = APIRouter(prefix="/api/practice", tags=["practice"])
+
+
+@practice_router.get("/blunder-positions")
+def get_blunder_positions(db: DbSession = Depends(get_db)):
+    """
+    Mengambil semua moves dengan label "Blunder" atau "Mistake" dari database (pakai aggregator yang sudah ada),
+    posisi SEBELUM blunder terjadi, dan informasi lainnya diurutkan dari yang paling baru.
+    """
+    try:
+        from backend.analysis.aggregator import get_blunders
+        blunders = get_blunders(db)
+        
+        # Urutkan blunders berdasarkan tanggal game (terbaru dahulu)
+        blunders = sorted(
+            blunders,
+            key=lambda m: m.game.date if (m.game and m.game.date) else datetime.min,
+            reverse=True
+        )
+
+        results = []
+        for m in blunders:
+            fen_before = get_fen_before_move(db, m.game, m)
+            results.append({
+                "game_id": m.game_id,
+                "move_number": m.move_number,
+                "fen_before": fen_before,
+                "your_move_was": m.san,
+                "label": m.label,
+                "date": m.game.date.isoformat() if (m.game and m.game.date) else None,
+                "score_after": m.score_after,
+                "is_white": m.is_white
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Error getting blunder positions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat mengambil daftar posisi blunder."
+        )
+
 
 
 
