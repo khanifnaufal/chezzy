@@ -122,7 +122,13 @@ function ChessAnalyzerApp() {
   const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white');
   const [currentScore, setCurrentScore] = useState<number>(0);
   const [showColorModal, setShowColorModal] = useState(false);
+  const [modalStep, setModalStep] = useState<'mode' | 'side'>('mode');
   const boardRef = useRef<BoardRef>(null);
+
+  const openNewGameModal = () => {
+    setModalStep('mode');
+    setShowColorModal(true);
+  };
 
   // WebSocket connection status
   const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'failed' | 'disconnected'>('disconnected');
@@ -475,7 +481,7 @@ function ChessAnalyzerApp() {
             )}
             <button
               id="btn-new-game-header"
-              onClick={() => setShowColorModal(true)}
+              onClick={openNewGameModal}
               className="px-4 py-2 text-sm font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition rounded-xl border border-slate-700 hover:border-slate-600 active:scale-95 duration-150"
             >
               Mulai Baru
@@ -501,7 +507,7 @@ function ChessAnalyzerApp() {
             </p>
             <button
               id="btn-new-game-landing"
-              onClick={() => setShowColorModal(true)}
+              onClick={openNewGameModal}
               className="mt-4 px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-100 font-bold rounded-2xl shadow-xl shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 duration-150"
             >
               New Game
@@ -604,22 +610,9 @@ function ChessAnalyzerApp() {
                       <p className="text-lg font-bold text-slate-100 mt-1">{getGameStatusLabel()}</p>
                     </div>
 
-                    <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-                      <button
-                        id="btn-mode-bot"
-                        onClick={() => setGameMode('bot')}
-                        className={`px-3 py-1.5 rounded-lg font-semibold transition ${gameMode === 'bot' ? 'bg-indigo-600 text-slate-100 shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                      >
-                        VS Bot
-                      </button>
-                      <button
-                        id="btn-mode-analysis"
-                        onClick={() => setGameMode('analysis')}
-                        className={`px-3 py-1.5 rounded-lg font-semibold transition ${gameMode === 'analysis' ? 'bg-indigo-600 text-slate-100 shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                      >
-                        Solo Analisis
-                      </button>
-                    </div>
+                    <span className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-indigo-400 font-semibold uppercase tracking-wider">
+                      {gameMode === 'bot' ? '🤖 VS Bot' : '🔬 Analisis'}
+                    </span>
                   </div>
 
                   {/* Undo / Redo controls */}
@@ -693,39 +686,93 @@ function ChessAnalyzerApp() {
         Chezzy Analyzer v1.0.0 &copy; 2026. Powered by Stockfish engine.
       </footer>
 
-      {/* Color Selection Modal */}
+      {/* Game Setup Modal */}
       {showColorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-6 shadow-2xl relative animate-scale-up">
-            <h3 className="text-lg font-bold text-center text-slate-200">Pilih Warna Anda</h3>
+        <div
+          onClick={() => setShowColorModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-6 shadow-2xl relative animate-scale-up cursor-default"
+          >
+            {modalStep === 'mode' ? (
+              <>
+                <h3 className="text-lg font-bold text-center text-slate-200">Pilih Mode Permainan</h3>
 
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                id="btn-color-white"
-                onClick={() => handleStartNewGame('white')}
-                className="flex flex-col items-center gap-3 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100"
-              >
-                <span className="text-4xl group-hover:scale-110 transition duration-150">♔</span>
-                <span className="text-sm font-semibold text-slate-200">Putih (White)</span>
-              </button>
+                <div className="grid grid-cols-1 gap-4">
+                  <button
+                    id="btn-choose-bot"
+                    onClick={() => {
+                      setGameMode('bot');
+                      setModalStep('side');
+                    }}
+                    className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left"
+                  >
+                    <span className="text-4xl group-hover:scale-110 transition duration-150">🤖</span>
+                    <div>
+                      <span className="block text-sm font-semibold text-slate-200">VS Bot</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Latih kemampuan catur Anda melawan Bot AI.</span>
+                    </div>
+                  </button>
 
-              <button
-                id="btn-color-black"
-                onClick={() => handleStartNewGame('black')}
-                className="flex flex-col items-center gap-3 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100"
-              >
-                <span className="text-4xl text-slate-400 group-hover:scale-110 transition duration-150">♚</span>
-                <span className="text-sm font-semibold text-slate-200">Hitam (Black)</span>
-              </button>
-            </div>
+                  <button
+                    id="btn-choose-analysis"
+                    onClick={() => {
+                      setGameMode('analysis');
+                      setModalStep('side');
+                    }}
+                    className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left"
+                  >
+                    <span className="text-4xl group-hover:scale-110 transition duration-150">🔬</span>
+                    <div>
+                      <span className="block text-sm font-semibold text-slate-200">Solo Analisis</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">Analisis langkah demi langkah dengan engine.</span>
+                    </div>
+                  </button>
+                </div>
 
-            <button
-              id="btn-color-cancel"
-              onClick={() => setShowColorModal(false)}
-              className="py-2.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 rounded-xl text-center border border-slate-800"
-            >
-              Batal
-            </button>
+                <button
+                  id="btn-color-cancel"
+                  onClick={() => setShowColorModal(false)}
+                  className="py-2.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 rounded-xl text-center border border-slate-800"
+                >
+                  Batal
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold text-center text-slate-200">Pilih Warna Anda</h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    id="btn-color-white"
+                    onClick={() => handleStartNewGame('white')}
+                    className="flex flex-col items-center gap-3 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100"
+                  >
+                    <span className="text-4xl group-hover:scale-110 transition duration-150">♔</span>
+                    <span className="text-sm font-semibold text-slate-200">Putih (White)</span>
+                  </button>
+
+                  <button
+                    id="btn-color-black"
+                    onClick={() => handleStartNewGame('black')}
+                    className="flex flex-col items-center gap-3 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100"
+                  >
+                    <span className="text-4xl text-slate-400 group-hover:scale-110 transition duration-150">♚</span>
+                    <span className="text-sm font-semibold text-slate-200">Hitam (Black)</span>
+                  </button>
+                </div>
+
+                <button
+                  id="btn-modal-back"
+                  onClick={() => setModalStep('mode')}
+                  className="py-2.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 rounded-xl text-center border border-slate-800"
+                >
+                  Kembali
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -737,7 +784,7 @@ function ChessAnalyzerApp() {
           playerColor={playerColor}
           onNewGame={() => {
             setGameOverEvent(null);
-            setShowColorModal(true);
+            openNewGameModal();
           }}
         />
       )}
