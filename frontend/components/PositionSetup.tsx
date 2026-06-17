@@ -77,10 +77,29 @@ export default function PositionSetup({ onLoadPosition, onBack }: PositionSetupP
       </p>
 
       {/* Input Field */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="fen-input" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          FEN String
-        </label>
+      <div className="flex flex-col gap-1.5 relative">
+        <div className="flex justify-between items-center">
+          <label htmlFor="fen-input" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            FEN String
+          </label>
+          <div className="relative group cursor-help">
+            <span className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-md font-bold">
+              ❔ Apa itu FEN?
+            </span>
+            {/* Tooltip Card */}
+            <div className="absolute right-0 top-full mt-2 w-72 bg-slate-950/95 border border-indigo-500/30 rounded-2xl p-4 flex flex-col gap-1.5 text-xs text-indigo-200/90 leading-relaxed shadow-2xl z-50 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 transform origin-top-right backdrop-blur-md">
+              <div className="flex items-center gap-1.5 font-bold text-indigo-300">
+                <span>💡</span> Apa itu FEN?
+              </div>
+              <p>
+                <strong>FEN (Forsyth-Edwards Notation)</strong> adalah kode teks standar yang menggambarkan susunan perwira di atas papan catur secara lengkap.
+              </p>
+              <p className="opacity-90">
+                Anda bisa mendapatkan kode ini dengan menyalin (<strong>Copy FEN</strong>) dari menu <strong>Share / Export</strong> di platform seperti <strong>Lichess</strong> atau <strong>Chess.com</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
         <textarea
           id="fen-input"
           value={fenInput}
