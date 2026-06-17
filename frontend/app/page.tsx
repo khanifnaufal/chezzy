@@ -7,6 +7,7 @@ import EvalBar from '../components/EvalBar';
 import MoveList, { Move } from '../components/MoveList';
 import RecommendPanel from '../components/RecommendPanel';
 import PositionSetup from '../components/PositionSetup';
+import HintPanel from '../components/HintPanel';
 import { startGame, resignGame } from '../lib/api';
 import { Recommendation, Game, GameOverEvent } from '../lib/types';
 import { Chess } from 'chess.js';
@@ -673,6 +674,14 @@ function ChessAnalyzerApp() {
 
                 {/* MoveList */}
                 <MoveList moves={moves} />
+
+                {/* HintPanel */}
+                {gameMode === 'analysis' && (
+                  <HintPanel
+                    fen={currentFen}
+                    is_white={playerColor === 'white'}
+                  />
+                )}
 
                 {/* Recommendation Panel */}
                 <RecommendPanel
