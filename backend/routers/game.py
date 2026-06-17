@@ -243,3 +243,45 @@ def get_game_detail(game_id: str, db: DbSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Gagal mengambil detail game.")
 
 
+# ---------------------------------------------------------------------------
+# POST /api/hint
+# ---------------------------------------------------------------------------
+
+hint_router = APIRouter(tags=["hint"])
+
+class HintRequest(BaseModel):
+    fen: str = Field(..., description="FEN string of the current board state")
+    level: int = Field(..., ge=1, le=3, description="Hint level (1-3)")
+    is_white: bool = Field(..., description="Whether the player requesting hint is White")
+
+    @field_validator("fen")
+    @classmethod
+    def check_fen(cls, v: str) -> str:
+        try:
+            chess.Board(v)
+        except ValueError:
+            raise ValueError("Format FEN tidak valid.")
+        return v
+
+@hint_router.post("/api/hint")
+def get_hint(request: HintRequest):
+    """
+    Endpoint untuk menghasilkan hint langkah catur untuk latihan solo.
+    Menerima level (1-3) dan FEN posisi.
+    """
+    try:
+        from backend.engine.hint_generator import generate_hint
+        hint_str = generate_hint(request.fen, request.level, request.is_white)
+        return {
+            "hint": hint_str,
+            "level": request.level
+        }
+    except Exception as e:
+        logger.error(f"Error generating hint: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Terjadi kesalahan internal saat membuat petunjuk (hint)."
+        )
+
+
+
