@@ -168,7 +168,7 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
               className="grid grid-cols-12 items-center py-1.5 px-3 hover:bg-slate-950/20 rounded-lg transition duration-150 border border-transparent"
             >
               {/* Move number */}
-              <div className="col-span-2 text-slate-500 font-mono font-bold text-sm">
+              <div className="col-span-2 text-slate-500 font-serif font-bold text-sm">
                 {pair.moveNumber}.
               </div>
 
@@ -186,16 +186,16 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
                         : 'border-transparent text-slate-100 hover:text-white'
                     }`}
                   >
-                    <span className="font-mono font-semibold">{pair.white.san}</span>
+                    <span className="font-serif font-bold text-sm">{pair.white.san}</span>
                     {renderBadge(pair.white.label)}
                   </span>
                 ) : (
-                  <span className="text-slate-700 font-mono">-</span>
+                  <span className="text-slate-700 font-serif">-</span>
                 )}
               </div>
 
               {/* Separator */}
-              <div className="col-span-2 text-slate-600 font-mono text-center text-xs">
+              <div className="col-span-2 text-slate-650 font-serif text-center text-xs">
                 ...
               </div>
 
@@ -213,11 +213,11 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
                         : 'border-transparent text-slate-100 hover:text-white'
                     }`}
                   >
-                    <span className="font-mono font-semibold">{pair.black.san}</span>
+                    <span className="font-serif font-bold text-sm">{pair.black.san}</span>
                     {renderBadge(pair.black.label)}
                   </span>
                 ) : (
-                  <span className="text-slate-600 font-mono">...</span>
+                  <span className="text-slate-600 font-serif">...</span>
                 )}
               </div>
             </div>
@@ -242,7 +242,7 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
             }}
             className="absolute z-50 pointer-events-none w-72 p-3.5 rounded-xl bg-slate-950/95 backdrop-blur-md border border-slate-800 text-slate-100 shadow-2xl text-xs transition-all duration-150 flex flex-col gap-2"
           >
-            <div className="font-bold font-mono text-indigo-400 flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <div className="font-serif font-bold text-indigo-500 flex items-center justify-between border-b border-slate-800 pb-1.5">
               <span>
                 {hoveredMove.moveNumber}{hoveredMove.isWhite ? '.' : '...'} {hoveredMove.san}
               </span>

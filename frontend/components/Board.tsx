@@ -429,12 +429,12 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     <div 
       style={boardWidth ? { width: boardWidth, height: boardWidth } : undefined}
       className={boardWidth
-        ? "rounded-2xl shadow-2xl border-4 border-slate-700/50 bg-slate-900 overflow-hidden shrink-0"
-        : "w-full max-w-[500px] aspect-square rounded-2xl shadow-2xl border-4 border-slate-700/50 bg-slate-900 shrink-0"
+        ? "rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] border-[#3a2212] ring-1 ring-[#dfb75c]/50 bg-[#3a2212] overflow-hidden shrink-0"
+        : "w-full max-w-[500px] aspect-square rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] border-[#3a2212] ring-1 ring-[#dfb75c]/50 bg-[#3a2212] shrink-0"
       }
     >
       <Chessboard
-        boardWidth={boardWidth ? (boardWidth - 8) : undefined}
+        boardWidth={boardWidth ? (boardWidth - 16) : undefined}
         position={currentFen}
         onPieceDrop={readOnly ? () => false : onPieceDrop}
         onPromotionCheck={readOnly ? () => false : onPromotionCheck}
@@ -444,9 +444,9 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
         customSquareStyles={customSquareStyles}
         arePiecesDraggable={!readOnly}
         animationDuration={100}
-        customDarkSquareStyle={{ backgroundColor: '#475569' }} // Tailwind slate-600
-        customLightSquareStyle={{ backgroundColor: '#cbd5e1' }} // Tailwind slate-300
-        customBoardStyle={{ borderRadius: '12px' }}
+        customDarkSquareStyle={{ backgroundColor: '#244b37' }} // Deep tournament felt green
+        customLightSquareStyle={{ backgroundColor: '#eae2d3' }} // Warm ivory/gading
+        customBoardStyle={{ borderRadius: '4px' }}
       />
     </div>
   );

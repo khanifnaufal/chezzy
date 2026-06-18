@@ -79,7 +79,7 @@ export default function DashboardPage() {
   if (!isMounted) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
         <p className="mt-4 text-sm font-medium">Memuat dashboard...</p>
       </div>
     );
@@ -192,7 +192,7 @@ export default function DashboardPage() {
 
           <Link
             href="/"
-            className="mt-8 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition"
+            className="mt-8 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition"
           >
             ♟️ Mulai Main Sekarang
           </Link>
@@ -384,7 +384,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-slate-100 font-mono">
+                    <span className="text-3xl font-serif font-black text-slate-100">
                       {phase.accuracy}%
                     </span>
                     <span className="text-slate-500 text-xs font-medium">Akurasi</span>
@@ -436,9 +436,9 @@ export default function DashboardPage() {
               {blunderData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={blunderData} layout="vertical" margin={{ left: -10, right: 10, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                    <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} width={110} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#223c34" horizontal={false} />
+                    <XAxis type="number" stroke="#8ea69d" fontSize={11} tickLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" stroke="#cbd8d3" fontSize={11} tickLine={false} width={110} />
                     <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.03)' }} />
                     <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={14}>
                       {blunderData.map((entry, index) => (
@@ -483,21 +483,21 @@ export default function DashboardPage() {
               {enrichedTrendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={enrichedTrendData} margin={{ left: -20, right: 10, top: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} domain={[0, 100]} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#223c34" />
+                    <XAxis dataKey="name" stroke="#8ea69d" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#8ea69d" fontSize={10} tickLine={false} domain={[0, 100]} />
                     <Tooltip content={<CustomLineTooltip />} />
                     <Line
                       type="monotone"
                       dataKey="Akurasi Game"
-                      stroke="rgba(99, 102, 241, 0.4)"
+                      stroke="rgba(223, 183, 92, 0.4)"
                       strokeWidth={1.5}
-                      dot={{ r: 3, strokeWidth: 1, stroke: 'rgba(99, 102, 241, 0.6)' }}
+                      dot={{ r: 3, strokeWidth: 1, stroke: 'rgba(223, 183, 92, 0.6)' }}
                     />
                     <Line
                       type="monotone"
                       dataKey="Moving Average (3)"
-                      stroke="#818cf8"
+                      stroke="#dfb75c"
                       strokeWidth={3}
                       dot={false}
                     />

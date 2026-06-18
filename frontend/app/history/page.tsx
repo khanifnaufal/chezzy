@@ -306,14 +306,14 @@ export default function HistoryPage() {
                         <td className="py-4 px-6">
                           {getResultBadge(game.result)}
                         </td>
-                        <td className="py-4 px-6 text-center font-bold font-mono">
+                        <td className="py-4 px-6 text-center font-bold font-serif">
                           {game.white_accuracy !== null ? (
                             <span className={game.white_accuracy >= 80 ? 'text-emerald-400' : game.white_accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'}>
                               {game.white_accuracy.toFixed(1)}%
                             </span>
                           ) : '-'}
                         </td>
-                        <td className="py-4 px-6 text-center font-bold font-mono">
+                        <td className="py-4 px-6 text-center font-bold font-serif">
                           {game.black_accuracy !== null ? (
                             <span className={game.black_accuracy >= 80 ? 'text-emerald-400' : game.black_accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'}>
                               {game.black_accuracy.toFixed(1)}%
@@ -365,7 +365,7 @@ export default function HistoryPage() {
                     {/* White Accuracy */}
                     <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl px-5 py-3 flex flex-col items-center gap-1">
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Akurasi Putih</span>
-                      <span className={`text-xl font-extrabold font-mono mt-1 ${
+                      <span className={`text-xl font-extrabold font-serif mt-1 ${
                         (gameDetail.white_accuracy ?? 0) >= 80 ? 'text-emerald-400' : (gameDetail.white_accuracy ?? 0) >= 60 ? 'text-amber-400' : 'text-rose-400'
                       }`}>
                         {gameDetail.white_accuracy !== null ? `${gameDetail.white_accuracy.toFixed(1)}%` : '-'}
@@ -375,7 +375,7 @@ export default function HistoryPage() {
                     {/* Black Accuracy */}
                     <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl px-5 py-3 flex flex-col items-center gap-1">
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Akurasi Hitam</span>
-                      <span className={`text-xl font-extrabold font-mono mt-1 ${
+                      <span className={`text-xl font-extrabold font-serif mt-1 ${
                         (gameDetail.black_accuracy ?? 0) >= 80 ? 'text-emerald-400' : (gameDetail.black_accuracy ?? 0) >= 60 ? 'text-amber-400' : 'text-rose-400'
                       }`}>
                         {gameDetail.black_accuracy !== null ? `${gameDetail.black_accuracy.toFixed(1)}%` : '-'}
@@ -436,7 +436,7 @@ export default function HistoryPage() {
                         <button
                           onClick={handlePrev}
                           disabled={currentMoveIndex === -1}
-                          className="px-5 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 font-bold"
+                          className="px-5 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:text-slate-500 active:scale-95 font-bold"
                           title="Langkah sebelumnya (Panah Kiri)"
                         >
                           ← Prev
@@ -447,7 +447,7 @@ export default function HistoryPage() {
                         <button
                           onClick={handleNext}
                           disabled={currentMoveIndex === gameDetail.moves.length - 1}
-                          className="px-5 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 font-bold"
+                          className="px-5 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:text-slate-500 active:scale-95 font-bold"
                           title="Langkah berikutnya (Panah Kanan)"
                         >
                           Next →
@@ -479,13 +479,13 @@ export default function HistoryPage() {
                           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                               <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Evaluasi Langkah</h3>
-                              <p className="text-lg font-black font-mono text-indigo-400 mt-0.5">
+                              <p className="text-lg font-bold font-serif text-indigo-500 mt-0.5">
                                 {activeMove.move_number}{activeMove.is_white ? '.' : '...'} {activeMove.san}
                               </p>
                             </div>
                             <div className="flex flex-col items-end gap-1.5">
                               {renderActiveMoveBadge(activeMove.label)}
-                              <span className="text-[10px] font-mono font-extrabold bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-400">
+                              <span className="text-[10px] font-serif font-extrabold bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-400">
                                 Eval: {formatScore(activeMove.score_after)}
                               </span>
                             </div>
@@ -501,13 +501,13 @@ export default function HistoryPage() {
                           <div className="grid grid-cols-2 gap-3 mt-1.5 pt-3 border-t border-slate-800/80">
                             <div className="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/50">
                               <span className="text-[9px] font-bold text-slate-500 uppercase">Eval Sebelum</span>
-                              <span className="block text-sm font-extrabold text-slate-300 font-mono mt-0.5">
+                              <span className="block text-sm font-extrabold text-slate-350 font-serif mt-0.5">
                                 {formatScore(activeMove.score_before)}
                               </span>
                             </div>
                             <div className="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/50">
                               <span className="text-[9px] font-bold text-slate-500 uppercase">Perubahan Eval</span>
-                              <span className={`block text-sm font-extrabold font-mono mt-0.5 ${
+                              <span className={`block text-sm font-extrabold font-serif mt-0.5 ${
                                 activeMove.score_after !== null && activeMove.score_before !== null
                                   ? (activeMove.is_white
                                       ? (activeMove.score_after - activeMove.score_before >= 0 ? 'text-emerald-400' : 'text-rose-400')

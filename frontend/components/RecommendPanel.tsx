@@ -137,10 +137,10 @@ export default function RecommendPanel({
                 {/* Top Row: Rank, Move, Score, Type */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${rankBadgeClass}`}>
+                    <span className={`text-[10px] font-serif font-black px-1.5 py-0.5 rounded border ${rankBadgeClass}`}>
                       {rankLabel}
                     </span>
-                    <span className="font-mono text-lg font-bold text-slate-100">
+                    <span className="font-serif text-lg font-bold text-slate-100">
                       {rec.move_san}
                     </span>
                     <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${typeBadgeClass}`}>
@@ -148,7 +148,7 @@ export default function RecommendPanel({
                     </span>
                   </div>
 
-                  <span className="text-xs font-mono font-bold text-indigo-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                  <span className="text-xs font-serif font-black text-indigo-500 bg-slate-950/40 px-2 py-1 rounded border border-slate-800">
                     {scoreStr}
                   </span>
                 </div>
@@ -171,7 +171,7 @@ export default function RecommendPanel({
 
                   <button
                     onClick={() => onHighlight(rec.move_uci)}
-                    className="shrink-0 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-slate-100 transition rounded-lg border border-slate-700 hover:border-slate-600 active:scale-95 duration-100"
+                    className="shrink-0 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-indigo-400 transition rounded-lg border border-slate-700 hover:border-indigo-500/40 active:scale-95 duration-100"
                   >
                     Lihat
                   </button>

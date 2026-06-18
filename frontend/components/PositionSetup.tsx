@@ -130,8 +130,8 @@ export default function PositionSetup({ onLoadPosition, onBack }: PositionSetupP
             position={previewFen}
             boardOrientation={getOrientation()}
             arePiecesDraggable={false}
-            customDarkSquareStyle={{ backgroundColor: '#475569' }} // Match Board.tsx slate-600
-            customLightSquareStyle={{ backgroundColor: '#cbd5e1' }} // Match Board.tsx slate-300
+            customDarkSquareStyle={{ backgroundColor: '#244b37' }} // Match Board.tsx felt green
+            customLightSquareStyle={{ backgroundColor: '#eae2d3' }} // Match Board.tsx warm ivory/gading
             customBoardStyle={{ borderRadius: '8px' }}
           />
         </div>

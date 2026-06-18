@@ -25,7 +25,7 @@ function AccuracyBadge({ value, label }: { value: number; label: string }) {
 
   return (
     <div className={`flex flex-col items-center gap-1 px-5 py-3 rounded-2xl border ${color}`}>
-      <span className="text-2xl font-black tabular-nums">{value.toFixed(1)}%</span>
+      <span className="text-2xl font-serif font-black tabular-nums">{value.toFixed(1)}%</span>
       <span className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</span>
     </div>
   );
@@ -76,7 +76,7 @@ function GameOverModal({
         {/* Emoji & result headline */}
         <div className="flex flex-col items-center gap-2">
           <span className="text-5xl">{emoji}</span>
-          <h2 className={`text-3xl font-black bg-gradient-to-r ${headlineColor} bg-clip-text text-transparent`}>
+          <h2 className={`text-3xl font-serif font-black bg-gradient-to-r ${headlineColor} bg-clip-text text-transparent`}>
             {resultLabel}
           </h2>
           <p className="text-slate-400 text-sm font-medium">{reasonLabel}</p>
@@ -97,7 +97,7 @@ function GameOverModal({
         {/* Player accuracy highlight */}
         <div className="bg-slate-800/60 rounded-2xl px-5 py-3 text-center border border-slate-700/50">
           <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Akurasi Kamu</p>
-          <p className="text-2xl font-black text-slate-100">
+          <p className="text-2xl font-serif font-black text-slate-100">
             {playerColor === 'white'
               ? event.white_accuracy.toFixed(1)
               : event.black_accuracy.toFixed(1)}%
@@ -109,7 +109,7 @@ function GameOverModal({
           <button
             id="btn-new-game-modal"
             onClick={onNewGame}
-            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-100 font-bold rounded-2xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:scale-95 duration-150"
+            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-950 font-serif font-extrabold rounded-2xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:scale-95 duration-150"
           >
             ♙ New Game
           </button>
@@ -557,13 +557,13 @@ function ChessAnalyzerApp() {
     }>
       {/* Sub-header action bar */}
       {activeGame && (
-        <div className="w-full max-w-7xl px-6 py-2.5 flex justify-between items-center bg-slate-900/30 border-b border-slate-800/40 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Status:</span>
-              <span className="text-sm font-bold text-slate-200">{getGameStatusLabel()}</span>
+        <div className="w-full max-w-7xl px-6 py-3 flex justify-between items-center bg-slate-900 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="brass-plaque px-4 py-1.5 flex items-center gap-2 font-serif font-bold tracking-tight shadow-md">
+              <span className="text-[10px] uppercase opacity-75">Status:</span>
+              <span className="text-sm font-black">{getGameStatusLabel()}</span>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-indigo-400 font-bold uppercase tracking-wider">
+            <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-950/40 border border-slate-800 text-indigo-500 font-bold uppercase tracking-wider">
               {gameMode === 'bot' ? '🤖 VS Bot' : '🔬 Analisis'}
             </span>
           </div>
@@ -612,7 +612,7 @@ function ChessAnalyzerApp() {
             <button
               id="btn-new-game-header"
               onClick={openNewGameModal}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition rounded-lg border border-slate-700 hover:border-slate-600 active:scale-95 duration-150"
+              className="px-3 py-1.5 text-xs font-serif font-black text-slate-950 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 transition rounded-lg shadow-md active:scale-95 duration-150"
             >
               Mulai Baru
             </button>
@@ -628,10 +628,10 @@ function ChessAnalyzerApp() {
         {!activeGame ? (
           /* Landing Page */
           <div className="text-center max-w-2xl px-6 py-16 bg-slate-900/40 rounded-3xl border border-slate-800/80 backdrop-blur-2xl shadow-2xl flex flex-col items-center gap-6 mt-8 animate-fade-in">
-            <div className="w-20 h-20 rounded-2xl bg-indigo-600/10 flex items-center justify-center border border-indigo-500/20 text-indigo-400 font-black text-4xl mb-2 shadow-2xl">
+            <div className="w-20 h-20 rounded-2xl bg-indigo-600/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500 font-black text-4xl mb-2 shadow-2xl">
               ♞
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-100">
+            <h2 className="text-3xl sm:text-4xl font-serif font-extrabold text-slate-100">
               Analisis Catur dengan Heuristik Stockfish
             </h2>
             <p className="text-slate-400 leading-relaxed text-sm sm:text-base">
@@ -640,7 +640,7 @@ function ChessAnalyzerApp() {
             <button
               id="btn-new-game-landing"
               onClick={openNewGameModal}
-              className="mt-4 px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-100 font-bold rounded-2xl shadow-xl shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 duration-150"
+              className="mt-4 px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-950 font-serif font-black rounded-2xl shadow-xl shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 duration-150"
             >
               New Game
             </button>

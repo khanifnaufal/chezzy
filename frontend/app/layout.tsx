@@ -1,10 +1,18 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Lora } from 'next/font/google';
 import Navbar from '../components/Navbar';
 import { Toaster } from 'react-hot-toast';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ 
+  subsets: ['latin'],
+  variable: '--font-sans',
+});
+
+const lora = Lora({
+  subsets: ['latin'],
+  variable: '--font-serif',
+});
 
 export const metadata: Metadata = {
   title: 'Chezzy Chess Analyzer',
@@ -18,25 +26,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} min-h-screen bg-slate-950 text-slate-100 flex flex-col`}>
+      <body className={`${inter.className} ${inter.variable} ${lora.variable} min-h-screen bg-slate-950 text-slate-100 flex flex-col`}>
         <Toaster
           position="top-right"
           toastOptions={{
             style: {
-              background: '#0f172a',
-              color: '#f8fafc',
-              border: '1px solid #334155',
+              background: '#11231e', // Matches slate-900
+              color: '#f4ede1', // Matches slate-100
+              border: '1px solid #dfb75c', // Gold/brass accent border
             },
             success: {
               iconTheme: {
                 primary: '#10b981',
-                secondary: '#ffffff',
+                secondary: '#11231e',
               },
             },
             error: {
               iconTheme: {
                 primary: '#f43f5e',
-                secondary: '#ffffff',
+                secondary: '#11231e',
               },
             },
           }}
