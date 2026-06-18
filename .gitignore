@@ -57,3 +57,5 @@ db/*.sqlite
 
 # Stockfish engine folder (binary and source)
 stockfish/
+
+.agents/

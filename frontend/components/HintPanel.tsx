@@ -6,9 +6,10 @@ import { getHint } from '../lib/api';
 interface HintPanelProps {
   fen: string;
   is_white: boolean;
+  noWrapper?: boolean;
 }
 
-export default function HintPanel({ fen, is_white }: HintPanelProps) {
+export default function HintPanel({ fen, is_white, noWrapper = false }: HintPanelProps) {
   const [hints, setHints] = useState<Record<number, string>>({});
   const [loadingLevel, setLoadingLevel] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,16 +65,21 @@ export default function HintPanel({ fen, is_white }: HintPanelProps) {
   };
 
   return (
-    <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
-      <div className="border-b border-slate-800 pb-3 flex justify-between items-center">
-        <div>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Petunjuk (Hints)</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Analisis posisi bertingkat</p>
+    <div className={noWrapper 
+      ? "flex flex-col gap-4 h-full min-h-0" 
+      : "bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl"
+    }>
+      {!noWrapper && (
+        <div className="border-b border-slate-800 pb-3 flex justify-between items-center">
+          <div>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Petunjuk (Hints)</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Analisis posisi bertingkat</p>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold uppercase tracking-wider">
+            Solo
+          </span>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold uppercase tracking-wider">
-          Solo
-        </span>
-      </div>
+      )}
 
       {/* Cards stack */}
       <div className="flex flex-col gap-3">

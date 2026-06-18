@@ -8,6 +8,7 @@ interface RecommendPanelProps {
   onHighlight: (uci: string | null) => void;
   isMyTurn: boolean;
   isLoading?: boolean;
+  noWrapper?: boolean;
 }
 
 export default function RecommendPanel({
@@ -15,6 +16,7 @@ export default function RecommendPanel({
   onHighlight,
   isMyTurn,
   isLoading = false,
+  noWrapper = false,
 }: RecommendPanelProps) {
   
   // Render loading skeleton
@@ -47,20 +49,32 @@ export default function RecommendPanel({
   );
 
   return (
-    <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl flex-1 min-h-[300px]">
-      {/* Header */}
-      <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-        <div>
-          <h3 className="text-sm font-bold text-slate-200">Rekomendasi Move</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {isMyTurn ? (
-              <span className="text-emerald-400 font-semibold animate-pulse">● Giliran kamu</span>
-            ) : (
-              <span className="text-slate-500">● Menunggu move lawan...</span>
-            )}
-          </p>
+    <div className={noWrapper 
+      ? "flex flex-col gap-4 h-full min-h-0" 
+      : "bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl flex-1 min-h-[300px]"
+    }>
+      {noWrapper ? (
+        <div className="text-xs text-slate-400 pb-1.5 border-b border-slate-800/40">
+          {isMyTurn ? (
+            <span className="text-emerald-400 font-semibold animate-pulse">● Giliran kamu</span>
+          ) : (
+            <span className="text-slate-500">● Menunggu move lawan...</span>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-200">Rekomendasi Move</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {isMyTurn ? (
+                <span className="text-emerald-400 font-semibold animate-pulse">● Giliran kamu</span>
+              ) : (
+                <span className="text-slate-500">● Menunggu move lawan...</span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Content Area */}
       {!isMyTurn ? (
@@ -78,7 +92,10 @@ export default function RecommendPanel({
           Tidak ada rekomendasi untuk posisi ini. Silakan jalankan langkah baru.
         </div>
       ) : (
-        <div className="flex flex-col gap-3 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
+        <div className={noWrapper 
+          ? "flex flex-col gap-3"
+          : "flex flex-col gap-3 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin"
+        }>
           {recommendations.slice(0, 3).map((rec, index) => {
             // Rank badge styling
             let rankLabel = `#${index + 1}`;

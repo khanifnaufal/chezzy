@@ -180,6 +180,44 @@ function ChessAnalyzerApp() {
   // Redo stack
   const [redoStack, setRedoStack] = useState<{ uci: string; promotion?: string }[]>([]);
 
+  // Tab switcher state
+  const [activeTab, setActiveTab] = useState<'hint' | 'recommend'>('recommend');
+  // Collapsible move list state
+  const [isMoveListExpanded, setIsMoveListExpanded] = useState(false);
+
+  // Board size measurement states
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const [boardSize, setBoardSize] = useState(400);
+
+  useEffect(() => {
+    const container = boardContainerRef.current;
+    if (!container) return;
+
+    const handleResize = () => {
+      const rect = container.getBoundingClientRect();
+      // EvalBar is 28px width, gap is 12px. Total offset is 40px.
+      const size = Math.max(150, Math.min(rect.width - 40, rect.height));
+      setBoardSize(size);
+    };
+
+    handleResize();
+
+    const observer = new ResizeObserver(() => {
+      handleResize();
+    });
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeGame]);
+
+  useEffect(() => {
+    if (gameMode !== 'analysis') {
+      setActiveTab('recommend');
+    }
+  }, [gameMode]);
+
   useEffect(() => {
     setRedoStack([]);
   }, [gameMode]);
@@ -513,23 +551,51 @@ function ChessAnalyzerApp() {
   const isPlayerTurn = activeGame ? (localGame.turn() === playerColor[0]) : false;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center">
+    <div className={activeGame 
+      ? "flex-1 w-full flex flex-col h-[calc(100vh-70px)] md:h-[calc(100vh-73px)] overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 items-center justify-between" 
+      : "min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center"
+    }>
       {/* Sub-header action bar */}
       {activeGame && (
-        <div className="w-full max-w-7xl px-6 py-3 flex justify-between items-center bg-slate-900/20 border-b border-slate-800/30">
-          <div className="flex items-center gap-2">
-            <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-semibold uppercase tracking-wider">
+        <div className="w-full max-w-7xl px-6 py-2.5 flex justify-between items-center bg-slate-900/30 border-b border-slate-800/40 shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Status:</span>
+              <span className="text-sm font-bold text-slate-200">{getGameStatusLabel()}</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-indigo-400 font-bold uppercase tracking-wider">
               {gameMode === 'bot' ? '🤖 VS Bot' : '🔬 Analisis'}
             </span>
           </div>
+
           <div className="flex items-center gap-2">
+            {/* Undo / Redo controls inside action bar */}
+            <div className="flex gap-1 border-r border-slate-800 pr-2 mr-2">
+              <button
+                id="btn-undo"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                className="px-2.5 py-1.5 rounded-lg border font-bold text-xs flex items-center justify-center gap-1 transition duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-slate-100 hover:border-slate-700"
+              >
+                ↶ Undo
+              </button>
+              <button
+                id="btn-redo"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                className="px-2.5 py-1.5 rounded-lg border font-bold text-xs flex items-center justify-center gap-1 transition duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-slate-100 hover:border-slate-700"
+              >
+                Redo ↷
+              </button>
+            </div>
+
             {!isGameEnded && (
               <>
                 <button
                   id={playerColor === 'white' ? 'btn-resign-white' : 'btn-resign-black'}
                   onClick={() => handleResign(playerColor)}
                   disabled={isResigning}
-                  className="px-4 py-2 text-sm font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/50 transition rounded-xl border border-rose-800/50 hover:border-rose-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 text-xs font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/50 transition rounded-lg border border-rose-800/50 hover:border-rose-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isResigning ? 'Menyerah...' : `🏳 Resign ${playerColor === 'white' ? 'Putih' : 'Hitam'}`}
                 </button>
@@ -537,7 +603,7 @@ function ChessAnalyzerApp() {
                   id={playerColor === 'white' ? 'btn-resign-black' : 'btn-resign-white'}
                   onClick={() => handleResign(playerColor === 'white' ? 'black' : 'white')}
                   disabled={isResigning}
-                  className="px-4 py-2 text-sm font-semibold text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/50 transition rounded-xl border border-emerald-800/50 hover:border-emerald-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/50 transition rounded-lg border border-emerald-800/50 hover:border-emerald-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isResigning ? 'Menyerah...' : `🏳 Resign ${playerColor === 'white' ? 'Hitam' : 'Putih'}`}
                 </button>
@@ -546,7 +612,7 @@ function ChessAnalyzerApp() {
             <button
               id="btn-new-game-header"
               onClick={openNewGameModal}
-              className="px-4 py-2 text-sm font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition rounded-xl border border-slate-700 hover:border-slate-600 active:scale-95 duration-150"
+              className="px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition rounded-lg border border-slate-700 hover:border-slate-600 active:scale-95 duration-150"
             >
               Mulai Baru
             </button>
@@ -554,9 +620,11 @@ function ChessAnalyzerApp() {
         </div>
       )}
 
-
       {/* Main Workspace */}
-      <main className="flex-1 w-full max-w-7xl px-4 py-8 flex items-center justify-center">
+      <main className={activeGame
+        ? "flex-1 w-full max-w-7xl px-6 py-4 flex flex-col min-h-0 justify-between overflow-hidden"
+        : "flex-1 w-full max-w-7xl px-4 py-8 flex items-center justify-center"
+      }>
         {!activeGame ? (
           /* Landing Page */
           <div className="text-center max-w-2xl px-6 py-16 bg-slate-900/40 rounded-3xl border border-slate-800/80 backdrop-blur-2xl shadow-2xl flex flex-col items-center gap-6 mt-8 animate-fade-in">
@@ -579,10 +647,10 @@ function ChessAnalyzerApp() {
           </div>
         ) : (
           /* Active Board Workspace */
-          <div className="w-full flex flex-col gap-6 items-center">
+          <div className="flex-1 min-h-0 w-full flex flex-col gap-4 items-center justify-between">
             {/* Connection Status Banners */}
             {wsStatus === 'reconnecting' && (
-              <div className="w-full max-w-5xl bg-rose-600/95 border border-rose-500 text-white px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg animate-pulse">
+              <div className="w-full max-w-5xl bg-rose-600/95 border border-rose-500 text-white px-5 py-2.5 rounded-2xl flex items-center gap-3 shadow-lg animate-pulse shrink-0">
                 <span className="text-xl">⚠️</span>
                 <div className="flex-1 text-sm font-bold">
                   Koneksi terputus, mencoba reconnect... (Percobaan {wsAttempt}/5)
@@ -590,7 +658,7 @@ function ChessAnalyzerApp() {
               </div>
             )}
             {wsStatus === 'failed' && (
-              <div className="w-full max-w-5xl bg-rose-700 border border-rose-600 text-white px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg">
+              <div className="w-full max-w-5xl bg-rose-700 border border-rose-600 text-white px-5 py-2.5 rounded-2xl flex items-center gap-3 shadow-lg shrink-0">
                 <span className="text-xl">🚨</span>
                 <div className="flex-1 text-sm font-bold">
                   Gagal reconnect, refresh halaman
@@ -598,41 +666,38 @@ function ChessAnalyzerApp() {
               </div>
             )}
 
-            {/* Threat warning banner */}
-            {activeThreat && !isGameEnded && (
-              <div className="w-full max-w-5xl bg-amber-500/10 border border-amber-500/30 text-amber-200 px-5 py-3 rounded-2xl flex items-center gap-3 shadow-lg shadow-amber-500/5 animate-fade-in">
-                <span className="text-xl">⚠</span>
-                <div className="flex-1 text-sm font-medium">
-                  Lawan mengancam <span className="font-semibold text-amber-100">{activeThreat.threat}</span> &mdash;{' '}
-                  Respons terbaik: <span className="font-bold font-mono text-emerald-400 bg-slate-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20">{activeThreat.bestResponse}</span>
-                </div>
-              </div>
-            )}
+            {/* Middle Section: Board + Right Tab Panel */}
+            <div className="flex-1 min-h-0 w-full flex flex-col lg:flex-row gap-6 items-stretch justify-center">
 
-            <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
-
-              {/* Column 1+2: EvalBar + Board */}
-              <div className="flex flex-col items-center gap-4 w-full max-w-[540px]">
+              {/* Column 1+2: EvalBar + Board Container */}
+              <div className="flex flex-col justify-between items-center gap-2 w-full lg:w-[480px] xl:w-[540px] shrink-0">
                 {/* Opponent Card */}
-                <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
+                <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-1.5 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${playerColor === 'white' ? 'bg-slate-500 border border-slate-400' : 'bg-slate-200 shadow'}`} />
-                    <span className="font-semibold text-sm text-slate-200">
+                    <div className={`w-2.5 h-2.5 rounded-full ${playerColor === 'white' ? 'bg-slate-500 border border-slate-400' : 'bg-slate-200 shadow'}`} />
+                    <span className="font-semibold text-xs text-slate-200">
                       {gameMode === 'bot' ? 'Opponent (Bot)' : 'Analysis Opponent'}
                     </span>
                   </div>
                   {!isPlayerTurn && !localGame.isGameOver() && !isGameEnded && (
-                    <span className="text-xs px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse">
                       Melangkah...
                     </span>
                   )}
                 </div>
 
                 {/* Board + EvalBar */}
-                <div className="w-full flex items-stretch gap-3">
-                  <EvalBar score={currentScore} />
-                  <div className="flex-1 min-w-0 aspect-square">
+                <div 
+                  ref={boardContainerRef}
+                  className="flex-1 min-h-0 w-full flex items-center justify-center gap-3"
+                >
+                  <div 
+                    style={{ height: boardSize }}
+                    className="flex items-stretch gap-3 justify-center"
+                  >
+                    <EvalBar score={currentScore} />
                     <Board
+                      boardWidth={boardSize}
                       position={currentFen}
                       playerColor={playerColor}
                       sessionId={activeGame?.id}
@@ -650,132 +715,168 @@ function ChessAnalyzerApp() {
                 </div>
 
                 {/* Player Card */}
-                <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
+                <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-1.5 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${playerColor === 'white' ? 'bg-slate-200 shadow' : 'bg-slate-500 border border-slate-400'}`} />
-                    <span className="font-semibold text-sm text-slate-200">You</span>
+                    <div className={`w-2.5 h-2.5 rounded-full ${playerColor === 'white' ? 'bg-slate-200 shadow' : 'bg-slate-500 border border-slate-400'}`} />
+                    <span className="font-semibold text-xs text-slate-200">You</span>
                   </div>
                   {isPlayerTurn && !localGame.isGameOver() && !isGameEnded && (
-                    <span className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20 animate-pulse">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 animate-pulse">
                       Giliran Anda
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Column 3: Sidebar */}
-              <div className="flex-1 w-full lg:max-w-[450px] flex flex-col gap-6">
+              {/* Column 3: Tabbed Sidebar Panel */}
+              <div className="flex-1 min-w-0 flex flex-col gap-3">
+                {/* Threat warning banner */}
+                {activeThreat && !isGameEnded && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 py-2 px-3 rounded-xl flex items-start gap-2 shadow-sm animate-fade-in shrink-0 text-xs">
+                    <span className="shrink-0 text-amber-400 mt-0.5">⚠️</span>
+                    <div className="flex-1 min-w-0 leading-normal">
+                      <p className="text-slate-200">
+                        <span className="font-bold text-amber-400 mr-1.5">Ancaman:</span>
+                        {activeThreat.threat}
+                      </p>
+                      <p className="text-slate-400 text-[11px] mt-1">
+                        Respons terbaik: <span className="font-bold font-mono text-emerald-400 bg-slate-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20">{activeThreat.bestResponse}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                {/* Blunder Practice Feedback Banner */}
+                {/* Blunder Practice Feedback Banner (if any) */}
                 {practiceFeedback && (
-                  <div className={`p-5 rounded-2xl border backdrop-blur-xl animate-fade-in flex flex-col gap-2 ${
+                  <div className={`p-4 rounded-xl border backdrop-blur-xl animate-fade-in flex flex-col gap-1.5 shrink-0 ${
                     practiceFeedback.status === 'success'
                       ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
                       : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
                   }`}>
-                    <div className="flex items-center gap-2 font-bold text-sm">
-                      <span className="text-lg">{practiceFeedback.status === 'success' ? '🏆' : '❌'}</span>
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <span className="text-sm">{practiceFeedback.status === 'success' ? '🏆' : '❌'}</span>
                       <span>{practiceFeedback.message}</span>
                     </div>
                     {practiceFeedback.status === 'fail' && (
-                      <p className="text-xs text-rose-300/80">
-                        Langkah Anda kurang optimal dibandingkan langkah asal. Klik <span className="underline cursor-pointer font-bold hover:text-rose-100 transition" onClick={handleUndo}>Undo</span> untuk membatalkan langkah dan mencoba mencari langkah lain.
+                      <p className="text-[10px] text-rose-300/80 leading-normal">
+                        Langkah Anda kurang optimal dibandingkan langkah asal. Klik <span className="underline cursor-pointer font-bold hover:text-rose-100 transition" onClick={handleUndo}>Undo</span> untuk membatalkan langkah dan mencari langkah lain.
                       </p>
                     )}
                   </div>
                 )}
 
-                {/* Status & Controls Panel */}
-                <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                    <div>
-                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status Permainan</h3>
-                      <p className="text-lg font-bold text-slate-100 mt-1">{getGameStatusLabel()}</p>
+                {/* Last Move Evaluation Banner (if any) */}
+                {lastMoveEvaluation && (
+                  <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex flex-col gap-1.5 shadow-md shrink-0 animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Langkah Terakhir:</span>
+                      <span className="text-xs font-bold font-mono text-indigo-400">{lastMoveEvaluation.san}</span>
+                      <span className="text-slate-500">—</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold border ${
+                        lastMoveEvaluation.label === 'Brilliant' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                        lastMoveEvaluation.label === 'Excellent' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        lastMoveEvaluation.label === 'Good' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        lastMoveEvaluation.label === 'Inaccuracy' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                        lastMoveEvaluation.label === 'Mistake' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                        lastMoveEvaluation.label === 'Blunder' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                        'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                      }`}>
+                        {lastMoveEvaluation.label}
+                      </span>
                     </div>
-
-                    <span className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-indigo-400 font-semibold uppercase tracking-wider">
-                      {gameMode === 'bot' ? '🤖 VS Bot' : '🔬 Analisis'}
-                    </span>
+                    <p className="text-xs text-slate-350 font-medium leading-relaxed">{lastMoveEvaluation.explanation}</p>
                   </div>
-
-                  {/* Undo / Redo controls */}
-                  <div className="flex gap-2 w-full border-b border-slate-800 pb-3">
-                    <button
-                      id="btn-undo"
-                      onClick={handleUndo}
-                      disabled={!canUndo}
-                      className="flex-1 py-2 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-slate-100 hover:border-slate-700"
-                    >
-                      ↶ Undo
-                    </button>
-                    <button
-                      id="btn-redo"
-                      onClick={handleRedo}
-                      disabled={!canRedo}
-                      className="flex-1 py-2 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-slate-100 hover:border-slate-700"
-                    >
-                      Redo ↷
-                    </button>
-                  </div>
-
-                  {/* Last Move Evaluation */}
-                  {lastMoveEvaluation && (
-                    <div className="border-b border-slate-800 pb-3 flex flex-col gap-2 animate-fade-in">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Langkah Terakhir:</span>
-                        <span className="text-sm font-bold font-mono text-indigo-400">
-                          {lastMoveEvaluation.san}
-                        </span>
-                        <span className="text-slate-500">—</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${
-                          lastMoveEvaluation.label === 'Brilliant' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                          lastMoveEvaluation.label === 'Excellent' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                          lastMoveEvaluation.label === 'Good' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                          lastMoveEvaluation.label === 'Inaccuracy' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                          lastMoveEvaluation.label === 'Mistake' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                          lastMoveEvaluation.label === 'Blunder' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                          'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                        }`}>
-                          {lastMoveEvaluation.label} {
-                            lastMoveEvaluation.label === 'Brilliant' || lastMoveEvaluation.label === 'Excellent' || lastMoveEvaluation.label === 'Good' ? '✓' : '✗'
-                          }
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                        {lastMoveEvaluation.explanation}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* MoveList */}
-                <MoveList moves={moves} />
-
-                {/* HintPanel */}
-                {gameMode === 'analysis' && (
-                  <HintPanel
-                    fen={currentFen}
-                    is_white={playerColor === 'white'}
-                  />
                 )}
 
-                {/* Recommendation Panel */}
-                <RecommendPanel
-                  recommendations={recommendations}
-                  onHighlight={handleHighlight}
-                  isMyTurn={isPlayerTurn}
-                  isLoading={isRecommendLoading}
-                />
+                {/* Right Tab Switcher Panel */}
+                <div className="flex-1 min-h-0 flex flex-col bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                  {/* Tab Headers */}
+                  <div className="flex border-b border-slate-800/80 bg-slate-950/20 shrink-0">
+                    {gameMode === 'analysis' && (
+                      <button
+                        onClick={() => setActiveTab('hint')}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition ${
+                          activeTab === 'hint'
+                            ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                        }`}
+                      >
+                        💡 Hint
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setActiveTab('recommend')}
+                      className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition ${
+                        activeTab === 'recommend'
+                          ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                      }`}
+                    >
+                      🎯 Rekomendasi
+                    </button>
+                  </div>
+
+                  {/* Tab Contents */}
+                  <div className="flex-1 min-h-0 overflow-y-auto p-4 scrollbar-thin">
+                    {activeTab === 'hint' && gameMode === 'analysis' && (
+                      <HintPanel
+                        fen={currentFen}
+                        is_white={playerColor === 'white'}
+                        noWrapper={true}
+                      />
+                    )}
+                    {activeTab === 'recommend' && (
+                      <RecommendPanel
+                        recommendations={recommendations}
+                        onHighlight={handleHighlight}
+                        isMyTurn={isPlayerTurn}
+                        isLoading={isRecommendLoading}
+                        noWrapper={true}
+                      />
+                    )}
+                  </div>
+                </div>
+
               </div>
             </div>
+
+            {/* Bottom Section: Collapsible Move List Bar */}
+            <div className="w-full shrink-0">
+              <div className="bg-slate-900/60 border border-slate-850 rounded-xl overflow-hidden transition-all duration-300 flex flex-col">
+                {/* Accordion Trigger */}
+                <button 
+                  onClick={() => setIsMoveListExpanded(!isMoveListExpanded)}
+                  className="w-full px-4 py-2 flex items-center justify-between hover:bg-slate-800/40 transition text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/40"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px]">{isMoveListExpanded ? '▼' : '▲'}</span>
+                    <span>Daftar Langkah (Move List)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 font-mono border border-slate-800/40">
+                      {moves.length} moves
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 italic font-normal">
+                    {isMoveListExpanded ? 'Klik untuk ciutkan' : 'Klik untuk ekspansi'}
+                  </span>
+                </button>
+                
+                {/* Accordion Content */}
+                <div className={`transition-all duration-300 overflow-hidden ${isMoveListExpanded ? 'h-32 p-3 border-t border-slate-800/50' : 'h-0'}`}>
+                  <MoveList moves={moves} noWrapper={true} />
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="w-full border-t border-slate-900/50 py-4 text-center text-xs text-slate-600 max-w-7xl">
-        Chezzy Analyzer v1.0.0 &copy; 2026. Powered by Stockfish engine.
-      </footer>
+      {!activeGame && (
+        <footer className="w-full border-t border-slate-900/50 py-4 text-center text-xs text-slate-600 max-w-7xl shrink-0">
+          Chezzy Analyzer v1.0.0 &copy; 2026. Powered by Stockfish engine.
+        </footer>
+      )}
 
       {/* Game Setup Modal */}
       {showColorModal && (

@@ -24,6 +24,7 @@ interface MoveListProps {
   moves: Move[];
   activeMoveIndex?: number;
   onMoveClick?: (index: number) => void;
+  noWrapper?: boolean;
 }
 
 interface MovePair {
@@ -32,7 +33,7 @@ interface MovePair {
   black?: Move;
 }
 
-const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMoveClick }) => {
+const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMoveClick, noWrapper = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
@@ -135,20 +136,31 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
   return (
     <div 
       ref={containerRef} 
-      className="relative w-full flex flex-col bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex-1 min-h-[300px]"
+      className={noWrapper 
+        ? "relative w-full flex flex-col h-full min-h-0" 
+        : "relative w-full flex flex-col bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex-1 min-h-[300px]"
+      }
     >
-      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-3 mb-4">
-        Daftar Langkah (Move List)
-      </h3>
+      {!noWrapper && (
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-3 mb-4">
+          Daftar Langkah (Move List)
+        </h3>
+      )}
 
       {pairs.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-12 text-center">
+        <div className={noWrapper 
+          ? "flex-1 flex items-center justify-center text-slate-500 text-sm py-6 text-center" 
+          : "flex-1 flex items-center justify-center text-slate-500 text-sm py-12 text-center"
+        }>
           Belum ada langkah dimainkan.
         </div>
       ) : (
         <div 
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto pr-1 scrollbar-thin flex flex-col gap-2 max-h-[320px]"
+          className={noWrapper
+            ? "flex-1 overflow-y-auto pr-1 scrollbar-thin flex flex-col gap-2 h-full"
+            : "flex-1 overflow-y-auto pr-1 scrollbar-thin flex flex-col gap-2 max-h-[320px]"
+          }
         >
           {pairs.map((pair) => (
             <div 

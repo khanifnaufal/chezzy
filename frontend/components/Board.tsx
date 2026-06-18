@@ -40,9 +40,10 @@ interface BoardProps {
     attempt: number
   ) => void;
   onNewMove?: () => void;
+  boardWidth?: number;
 }
 
-const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false, onConnectionStatusChange, onNewMove }, ref) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false, onConnectionStatusChange, onNewMove, boardWidth }, ref) => {
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -425,8 +426,15 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
   };
 
   return (
-    <div className="w-full max-w-[500px] aspect-square rounded-2xl shadow-2xl border-4 border-slate-700/50 bg-slate-900">
+    <div 
+      style={boardWidth ? { width: boardWidth, height: boardWidth } : undefined}
+      className={boardWidth
+        ? "rounded-2xl shadow-2xl border-4 border-slate-700/50 bg-slate-900 overflow-hidden shrink-0"
+        : "w-full max-w-[500px] aspect-square rounded-2xl shadow-2xl border-4 border-slate-700/50 bg-slate-900 shrink-0"
+      }
+    >
       <Chessboard
+        boardWidth={boardWidth ? (boardWidth - 8) : undefined}
         position={currentFen}
         onPieceDrop={readOnly ? () => false : onPieceDrop}
         onPromotionCheck={readOnly ? () => false : onPromotionCheck}
