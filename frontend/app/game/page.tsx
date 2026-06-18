@@ -14,6 +14,7 @@ import { startGame, resignGame } from '../../lib/api';
 import { Recommendation, Game, GameOverEvent } from '../../lib/types';
 import { Chess } from 'chess.js';
 import Image from 'next/image';
+import { Trophy, Handshake, Frown, Play, Flag, AlertTriangle, Bot, Activity, Settings, Brain, Crown, XCircle } from 'lucide-react';
 
 const queryClient = new QueryClient();
 
@@ -64,7 +65,15 @@ function GameOverModal({
     (playerColor === 'black' && event.result === '0-1');
   const isDraw = event.result === '1/2-1/2';
 
-  const emoji = playerWon ? '🏆' : isDraw ? '🤝' : '🫡';
+  let modalIcon: React.ReactNode = null;
+  if (playerWon) {
+    modalIcon = <Trophy className="w-12 h-12 text-amber-400 animate-bounce shrink-0" />;
+  } else if (isDraw) {
+    modalIcon = <Handshake className="w-12 h-12 text-sky-400 shrink-0" />;
+  } else {
+    modalIcon = <Frown className="w-12 h-12 text-slate-400 shrink-0" />;
+  }
+
   const headlineColor = playerWon
     ? 'from-amber-400 to-yellow-300'
     : isDraw
@@ -75,7 +84,7 @@ function GameOverModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
       <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-8 w-full max-w-md flex flex-col gap-6 shadow-2xl shadow-black/60 animate-scale-up">
         <div className="flex flex-col items-center gap-2">
-          <span className="text-5xl">{emoji}</span>
+          {modalIcon}
           <h2 className={`text-3xl font-serif font-black bg-gradient-to-r ${headlineColor} bg-clip-text text-transparent`}>
             {resultLabel}
           </h2>
@@ -100,9 +109,9 @@ function GameOverModal({
           <button
             id="btn-new-game-modal"
             onClick={onNewGame}
-            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-950 font-serif font-extrabold rounded-2xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:scale-95 duration-150"
+            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-950 font-serif font-extrabold rounded-2xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:scale-95 duration-150 flex items-center justify-center gap-1.5"
           >
-            ♙ New Game
+            <Play className="w-4 h-4 fill-current shrink-0" /> New Game
           </button>
         </div>
       </div>
@@ -439,7 +448,11 @@ function ChessAnalyzerApp() {
                   disabled={isResigning}
                   className="px-3 py-1.5 text-xs font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/50 transition rounded-lg border border-rose-800/50 hover:border-rose-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isResigning ? 'Resigning...' : `🏳 Resign ${playerColor === 'white' ? 'White' : 'Black'}`}
+                  {isResigning ? 'Resigning...' : (
+                    <span className="flex items-center gap-1.5 justify-center">
+                      <Flag className="w-3.5 h-3.5 shrink-0" /> Resign {playerColor === 'white' ? 'White' : 'Black'}
+                    </span>
+                  )}
                 </button>
                 <button
                   id={playerColor === 'white' ? 'btn-resign-black' : 'btn-resign-white'}
@@ -447,7 +460,11 @@ function ChessAnalyzerApp() {
                   disabled={isResigning}
                   className="px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/50 transition rounded-lg border border-emerald-800/50 hover:border-emerald-700/60 active:scale-95 duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isResigning ? 'Resigning...' : `🏳 Resign ${playerColor === 'white' ? 'Black' : 'White'}`}
+                  {isResigning ? 'Resigning...' : (
+                    <span className="flex items-center gap-1.5 justify-center">
+                      <Flag className="w-3.5 h-3.5 shrink-0" /> Resign {playerColor === 'white' ? 'Black' : 'White'}
+                    </span>
+                  )}
                 </button>
               </>
             )}
@@ -547,7 +564,7 @@ function ChessAnalyzerApp() {
               <div className="flex-1 min-w-0 flex flex-col gap-3">
                 {activeThreat && !isGameEnded && (
                   <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 py-2 px-3 rounded-xl flex items-start gap-2 shadow-sm animate-fade-in shrink-0 text-xs">
-                    <span className="shrink-0 text-amber-400 mt-0.5">⚠️</span>
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0 leading-normal">
                       <p className="text-slate-200"><span className="font-bold text-amber-400 mr-1.5">Threat:</span>{activeThreat.threat}</p>
                       <p className="text-slate-400 text-[11px] mt-1">Best response: <span className="font-bold font-mono text-emerald-400 bg-slate-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20">{activeThreat.bestResponse}</span></p>
@@ -558,7 +575,11 @@ function ChessAnalyzerApp() {
                 {practiceFeedback && (
                   <div className={`p-4 rounded-xl border backdrop-blur-xl animate-fade-in flex flex-col gap-1.5 shrink-0 ${practiceFeedback.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-rose-500/10 border-rose-500/30 text-rose-200'}`}>
                     <div className="flex items-center gap-2 font-bold text-xs">
-                      <span className="text-sm">{practiceFeedback.status === 'success' ? '🏆' : '❌'}</span>
+                      {practiceFeedback.status === 'success' ? (
+                        <Trophy className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
                       <span>{practiceFeedback.message}</span>
                     </div>
                     {practiceFeedback.status === 'fail' && (
@@ -669,14 +690,14 @@ function ChessAnalyzerApp() {
                 <h3 className="text-lg font-bold text-center text-slate-200">Choose Game Mode</h3>
                 <div className="grid grid-cols-1 gap-4">
                   <button id="btn-choose-bot" onClick={() => { setGameMode('bot'); setModalStep('side'); }} className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left">
-                    <span className="text-4xl group-hover:scale-110 transition duration-150">🤖</span>
+                    <Bot className="w-10 h-10 text-indigo-400 group-hover:scale-110 transition duration-150 shrink-0" />
                     <div>
                       <span className="block text-sm font-semibold text-slate-200">VS Bot</span>
                       <span className="block text-xs text-slate-400 mt-0.5">Practice your chess against a random AI bot.</span>
                     </div>
                   </button>
                   <button id="btn-choose-analysis" onClick={() => { setGameMode('analysis'); setModalStep('analysis_setup'); }} className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left">
-                    <span className="text-4xl group-hover:scale-110 transition duration-150">🔬</span>
+                    <Activity className="w-10 h-10 text-indigo-400 group-hover:scale-110 transition duration-150 shrink-0" />
                     <div>
                       <span className="block text-sm font-semibold text-slate-200">Solo Analysis</span>
                       <span className="block text-xs text-slate-400 mt-0.5">Analyze moves step-by-step with the engine.</span>
@@ -690,21 +711,21 @@ function ChessAnalyzerApp() {
                 <h3 className="text-lg font-bold text-center text-slate-200">Setup Solo Analysis</h3>
                 <div className="grid grid-cols-1 gap-4">
                   <button id="btn-choose-start-pos" onClick={() => setModalStep('side')} className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left">
-                    <span className="text-4xl group-hover:scale-110 transition duration-150">🏁</span>
+                    <Play className="w-10 h-10 text-indigo-400 group-hover:scale-110 transition duration-150 shrink-0" />
                     <div>
                       <span className="block text-sm font-semibold text-slate-200">Start from initial position</span>
                       <span className="block text-xs text-slate-400 mt-0.5">Begin a standard chess game from the starting position.</span>
                     </div>
                   </button>
                   <button id="btn-choose-manual-setup" onClick={() => setModalStep('position_setup')} className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left">
-                    <span className="text-4xl group-hover:scale-110 transition duration-150">⚙️</span>
+                    <Settings className="w-10 h-10 text-indigo-400 group-hover:scale-110 transition duration-150 shrink-0" />
                     <div>
                       <span className="block text-sm font-semibold text-slate-200">Manual position setup</span>
                       <span className="block text-xs text-slate-400 mt-0.5">Enter a custom position via FEN string.</span>
                     </div>
                   </button>
                   <button id="btn-choose-blunder-practice" onClick={() => setModalStep('blunder_practice')} className="flex items-center gap-4 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100 text-left">
-                    <span className="text-4xl group-hover:scale-110 transition duration-150">🧠</span>
+                    <Brain className="w-10 h-10 text-indigo-400 group-hover:scale-110 transition duration-150 shrink-0" />
                     <div>
                       <span className="block text-sm font-semibold text-slate-200">Practice from Your Blunders</span>
                       <span className="block text-xs text-slate-400 mt-0.5">Train from mistakes made in previous games.</span>
@@ -739,11 +760,11 @@ function ChessAnalyzerApp() {
                 <h3 className="text-lg font-bold text-center text-slate-200">Choose Your Color</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <button id="btn-color-white" onClick={() => handleStartNewGame('white')} className="flex flex-col items-center gap-3 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100">
-                    <span className="text-4xl group-hover:scale-110 transition duration-150">♔</span>
+                    <Crown className="w-10 h-10 text-slate-100 fill-white group-hover:scale-110 transition duration-150 shrink-0" />
                     <span className="text-sm font-semibold text-slate-200">White</span>
                   </button>
                   <button id="btn-color-black" onClick={() => handleStartNewGame('black')} className="flex flex-col items-center gap-3 p-4 bg-slate-950 hover:bg-slate-800/60 border border-slate-800 hover:border-indigo-500/50 rounded-2xl transition group active:scale-95 duration-100">
-                    <span className="text-4xl text-slate-400 group-hover:scale-110 transition duration-150">♚</span>
+                    <Crown className="w-10 h-10 text-slate-400 fill-slate-800 group-hover:scale-110 transition duration-150 shrink-0" />
                     <span className="text-sm font-semibold text-slate-200">Black</span>
                   </button>
                 </div>

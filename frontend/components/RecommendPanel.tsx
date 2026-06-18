@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Recommendation } from '../lib/types';
+import { Loader2 } from 'lucide-react';
 
 interface RecommendPanelProps {
   recommendations: Recommendation[];
@@ -79,7 +80,7 @@ export default function RecommendPanel({
       {/* Content Area */}
       {!isMyTurn ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-slate-500">
-          <div className="text-3xl mb-2">⏳</div>
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2 shrink-0" />
           <p className="text-sm font-medium">Menunggu move lawan...</p>
           <p className="text-xs text-slate-650 mt-1 max-w-[250px] leading-relaxed">
             Rekomendasi langkah terbaik Stockfish akan muncul setelah lawan melangkah.

@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import Board from '../../components/Board';
 import EvalBar from '../../components/EvalBar';
 import MoveList, { Move } from '../../components/MoveList';
 import { getGames, getGameDetail } from '../../lib/api';
 import { GameSummary, GameDetail } from '../../lib/types';
+import { Sparkles, Check, CheckCheck, AlertTriangle, X, Skull, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Info } from 'lucide-react';
 
 export default function HistoryPage() {
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -18,6 +19,25 @@ export default function HistoryPage() {
   const [isLoadingDetail, setIsLoadingDetail] = useState<boolean>(false);
   const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const [boardSize, setBoardSize] = useState(400);
+
+  // ResizeObserver to dynamically measure parent width and set board width
+  useEffect(() => {
+    const container = boardContainerRef.current;
+    if (!container) return;
+    const handleResize = () => {
+      const rect = container.getBoundingClientRect();
+      // Calculate size that fits both height and width, leaving margin
+      const size = Math.max(150, Math.min(rect.width - 24, rect.height || 400));
+      setBoardSize(size);
+    };
+    handleResize();
+    const observer = new ResizeObserver(() => { handleResize(); });
+    observer.observe(container);
+    return () => { observer.disconnect(); };
+  }, [gameDetail]);
 
   // Fetch games list on load
   useEffect(() => {
@@ -150,25 +170,25 @@ export default function HistoryPage() {
     }
   };
 
-  const getResultBadge = (result: string | null) => {
-    if (!result) return <span className="text-slate-400">Aktif</span>;
+  const getResultBadge = (result: string | null, compact = false) => {
+    if (!result) return <span className="text-slate-500 text-[10px]">Aktif</span>;
     if (result === '1-0') {
       return (
         <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-bold font-mono">
-          1-0 (Putih Menang)
+          {compact ? '1-0' : '1-0 (Putih Menang)'}
         </span>
       );
     }
     if (result === '0-1') {
       return (
         <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-bold font-mono">
-          0-1 (Hitam Menang)
+          {compact ? '0-1' : '0-1 (Hitam Menang)'}
         </span>
       );
     }
     return (
       <span className="px-2 py-0.5 bg-slate-500/10 text-slate-400 border border-slate-700 rounded-lg text-xs font-bold font-mono">
-        ½-½ (Remis)
+        {compact ? '½-½' : '½-½ (Remis)'}
       </span>
     );
   };
@@ -197,34 +217,38 @@ export default function HistoryPage() {
     const norm = label.toLowerCase();
     let bg = 'bg-slate-800 text-slate-400 border-slate-700';
     let text = label;
-    let icon = '';
+    let icon: React.ReactNode = null;
 
     if (norm === 'brilliant') {
       bg = 'bg-purple-500/15 text-purple-400 border-purple-500/30 shadow-[0_0_8px_rgba(168,85,247,0.2)]';
       text = 'Brilliant';
-      icon = '✨';
-    } else if (norm === 'good' || norm === 'excellent') {
+      icon = <Sparkles className="w-3.5 h-3.5 shrink-0" />;
+    } else if (norm === 'excellent') {
       bg = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]';
-      text = norm === 'excellent' ? 'Excellent' : 'Good';
-      icon = norm === 'excellent' ? '✓✓' : '✓';
+      text = 'Excellent';
+      icon = <CheckCheck className="w-3.5 h-3.5 shrink-0" />;
+    } else if (norm === 'good') {
+      bg = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]';
+      text = 'Good';
+      icon = <Check className="w-3.5 h-3.5 shrink-0" />;
     } else if (norm === 'inaccuracy') {
       bg = 'bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_8px_rgba(234,179,8,0.2)]';
       text = 'Inaccuracy';
-      icon = '⚠';
+      icon = <AlertTriangle className="w-3.5 h-3.5 shrink-0" />;
     } else if (norm === 'mistake') {
       bg = 'bg-orange-500/15 text-orange-400 border-orange-500/30 shadow-[0_0_8px_rgba(249,115,22,0.2)]';
       text = 'Mistake';
-      icon = '✗';
+      icon = <X className="w-3.5 h-3.5 shrink-0" />;
     } else if (norm === 'blunder') {
       bg = 'bg-rose-500/15 text-rose-400 border-rose-500/30 shadow-[0_0_8px_rgba(239,68,68,0.2)]';
       text = 'Blunder';
-      icon = '✗✗';
+      icon = <Skull className="w-3.5 h-3.5 shrink-0" />;
     }
 
     return (
-      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg border font-bold ${bg}`}>
+      <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-lg border font-bold ${bg}`}>
         <span>{text}</span>
-        {icon && <span className="text-[10px] ml-0.5">{icon}</span>}
+        {icon}
       </span>
     );
   };
@@ -244,128 +268,163 @@ export default function HistoryPage() {
   const activeMove = gameDetail && currentMoveIndex >= 0 ? gameDetail.moves[currentMoveIndex] : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center py-8 px-4">
-      <div className="w-full max-w-7xl flex flex-col gap-8">
+    <div className="h-[calc(100vh-70px)] md:h-[calc(100vh-73px)] w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center overflow-hidden">
+      <div className="w-full max-w-7xl flex-1 flex flex-col min-h-0 p-4 md:p-6 gap-4 animate-fade-in">
         
-        {/* Title */}
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100">Riwayat Permainan</h2>
-          <p className="text-slate-400 text-sm mt-1">Review dan replay permainan catur yang telah selesai dianalisis.</p>
+        {/* Title / Header Bar */}
+        <div className="flex justify-between items-center shrink-0">
+          <div>
+            <h2 className="text-xl md:text-2xl font-extrabold text-slate-100 flex items-center gap-2">
+              <span>Riwayat Permainan</span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400">
+                {games.length} Games
+              </span>
+            </h2>
+            <p className="text-slate-400 text-xs mt-0.5 hidden sm:block">
+              Review dan replay permainan catur yang telah selesai dianalisis.
+            </p>
+          </div>
         </div>
 
         {errorMsg && (
-          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 px-5 py-3 rounded-2xl text-sm font-medium shadow-lg">
-            ⚠ {errorMsg}
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 px-4 py-2.5 rounded-xl text-xs font-medium shadow-lg flex items-center gap-2 shrink-0">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" /> {errorMsg}
           </div>
         )}
 
-        {/* Table of Saved Games */}
-        <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-2xl shadow-xl">
-          {isLoadingGames ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
-              <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-              <p className="text-sm font-medium">Memuat riwayat game...</p>
-            </div>
-          ) : games.length === 0 ? (
-            <div className="text-center py-16 text-slate-500 text-sm">
-              Belum ada game. Mulai game pertamamu!
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800/60 bg-slate-950/40 text-slate-400 uppercase tracking-wider text-[11px] font-bold">
-                    <th className="py-4 px-6">Tanggal</th>
-                    <th className="py-4 px-6">Putih vs Hitam</th>
-                    <th className="py-4 px-6">Hasil</th>
-                    <th className="py-4 px-6 text-center">Akurasi Putih</th>
-                    <th className="py-4 px-6 text-center">Akurasi Hitam</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/40 text-sm">
-                  {games.map((game) => {
-                    const isSelected = selectedGameId === game.game_id;
-                    return (
-                      <tr
-                        key={game.game_id}
-                        onClick={() => setSelectedGameId(isSelected ? null : game.game_id)}
-                        className={`hover:bg-slate-900/50 cursor-pointer transition duration-150 ${
-                          isSelected ? 'bg-indigo-600/10 border-l-2 border-l-indigo-500' : ''
-                        }`}
-                      >
-                        <td className="py-4 px-6 text-slate-300 font-mono text-xs">
-                          {formatDate(game.date)}
-                        </td>
-                        <td className="py-4 px-6 font-semibold text-slate-200">
-                          <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-950 text-[10px] font-extrabold mr-1.5">W</span>
-                          {game.white} 
-                          <span className="text-slate-500 mx-2">vs</span> 
-                          <span className="inline-block px-1.5 py-0.5 rounded bg-slate-950 text-slate-100 border border-slate-700 text-[10px] font-extrabold mr-1.5">B</span>
-                          {game.black}
-                        </td>
-                        <td className="py-4 px-6">
-                          {getResultBadge(game.result)}
-                        </td>
-                        <td className="py-4 px-6 text-center font-bold font-serif">
-                          {game.white_accuracy !== null ? (
-                            <span className={game.white_accuracy >= 80 ? 'text-emerald-400' : game.white_accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'}>
-                              {game.white_accuracy.toFixed(1)}%
-                            </span>
-                          ) : '-'}
-                        </td>
-                        <td className="py-4 px-6 text-center font-bold font-serif">
-                          {game.black_accuracy !== null ? (
-                            <span className={game.black_accuracy >= 80 ? 'text-emerald-400' : game.black_accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'}>
-                              {game.black_accuracy.toFixed(1)}%
-                            </span>
-                          ) : '-'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Selected Game Replay Workspace */}
-        {selectedGameId && (
-          <div className="border-t border-slate-800/60 pt-8 flex flex-col gap-6">
+        {/* Split Container */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 w-full overflow-hidden">
+          
+          {/* Left Column: Sidebar with Game List */}
+          <div className={`w-full lg:w-[320px] xl:w-[360px] flex flex-col bg-slate-900/30 border border-slate-800/80 rounded-2xl p-4 shrink-0 min-h-0 ${selectedGameId ? 'hidden lg:flex' : 'flex'}`}>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 shrink-0">
+              Daftar Permainan
+            </h3>
             
-            {isLoadingDetail ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-                <div className="w-10 h-10 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-                <p className="text-sm font-semibold">Mengambil detail game...</p>
+            {isLoadingGames ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                <p className="text-xs font-medium">Memuat...</p>
+              </div>
+            ) : games.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-center p-6 text-slate-500 text-xs leading-relaxed">
+                Belum ada game catur yang tersimpan. Mulailah bermain game baru!
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 scrollbar-thin">
+                {games.map((game) => {
+                  const isSelected = selectedGameId === game.game_id;
+                  return (
+                    <div
+                      key={game.game_id}
+                      onClick={() => setSelectedGameId(isSelected ? null : game.game_id)}
+                      className={`p-3 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col gap-2 relative overflow-hidden ${
+                        isSelected
+                          ? 'bg-indigo-600/10 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.12)]'
+                          : 'bg-slate-950/20 border-slate-800/80 hover:bg-slate-900/30 hover:border-slate-700/60'
+                      }`}
+                    >
+                      {/* Selected Indicator Light */}
+                      {isSelected && (
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
+                      )}
+                      
+                      {/* Card Header: Date & Result */}
+                      <div className="flex justify-between items-center text-[9px] text-slate-500 font-mono">
+                        <span>{formatDate(game.date)}</span>
+                        <div>{getResultBadge(game.result, true)}</div>
+                      </div>
+
+                      {/* Card Body: Matchup */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center text-xs font-semibold text-slate-300">
+                          <span className="inline-block w-4 h-4 text-center leading-4 rounded bg-slate-105 text-slate-950 font-extrabold text-[9px] mr-1.5 shrink-0">W</span>
+                          <span className="truncate max-w-[150px]">{game.white}</span>
+                          {game.white_accuracy !== null && (
+                            <span className={`ml-auto font-mono font-bold text-[10px] ${
+                              game.white_accuracy >= 80 ? 'text-emerald-400' : game.white_accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'
+                            }`}>
+                              {game.white_accuracy.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center text-xs font-semibold text-slate-300">
+                          <span className="inline-block w-4 h-4 text-center leading-4 rounded bg-slate-950 text-slate-100 border border-slate-800 font-extrabold text-[9px] mr-1.5 shrink-0">B</span>
+                          <span className="truncate max-w-[150px]">{game.black}</span>
+                          {game.black_accuracy !== null && (
+                            <span className={`ml-auto font-mono font-bold text-[10px] ${
+                              game.black_accuracy >= 80 ? 'text-emerald-400' : game.black_accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'
+                            }`}>
+                              {game.black_accuracy.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Main Analysis Workspace */}
+          <div className={`flex-1 bg-slate-900/10 border border-slate-800/80 rounded-2xl min-h-0 overflow-hidden flex flex-col relative ${selectedGameId ? 'flex' : 'hidden lg:flex'}`}>
+            {!selectedGameId ? (
+              /* Empty State */
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-lg mx-auto gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-400 shadow-lg shadow-indigo-500/5 animate-pulse">
+                  <Info className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-200">Pilih Game untuk Dianalisis</h3>
+                  <p className="text-slate-400 text-xs mt-2 leading-relaxed">
+                    Silakan pilih salah satu partai game dari daftar di sebelah kiri untuk mereview langkah, melihat akurasi permainan, evaluasi dari engine Stockfish, dan rincian kesalahan.
+                  </p>
+                </div>
+              </div>
+            ) : isLoadingDetail ? (
+              /* Loading Detail State */
+              <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3 text-slate-400">
+                <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                <p className="text-xs font-semibold">Mengambil detail permainan...</p>
               </div>
             ) : gameDetail ? (
-              <div className="flex flex-col gap-6 animate-fade-in">
+              /* Replay Workspace Content */
+              <div className="flex-1 flex flex-col min-h-0 p-4 md:p-5 gap-4 overflow-y-auto lg:overflow-hidden">
                 
                 {/* Game Info Header Summary */}
-                <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl">
-                  <div className="flex flex-col gap-1.5 text-center md:text-left">
-                    <span className="text-xs font-semibold text-indigo-400 tracking-wider uppercase">Analisis Review</span>
-                    <div className="flex items-center flex-wrap gap-2 text-xl font-extrabold text-slate-100 justify-center md:justify-start">
+                <div className="bg-slate-900/45 border border-slate-800/85 rounded-2xl p-3 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+                  <div className="flex flex-col gap-1 text-center sm:text-left">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedGameId(null)}
+                        className="lg:hidden px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 font-semibold flex items-center gap-1 mr-1.5"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> List
+                      </button>
+                      <span className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">Analisis Review</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-base font-extrabold text-slate-100 justify-center sm:justify-start">
                       <span>{gameDetail.white}</span>
-                      <span className="text-slate-500 text-sm font-medium">vs</span>
+                      <span className="text-slate-500 text-xs font-medium">vs</span>
                       <span>{gameDetail.black}</span>
                     </div>
-                    <div className="text-xs text-slate-400 font-mono">
+                    <div className="text-[10px] text-slate-400 font-mono">
                       Partai dimainkan pada: {formatDate(gameDetail.date)}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6 shrink-0 flex-wrap justify-center">
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap justify-center">
                     {/* Result Card */}
-                    <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl px-5 py-3 flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Hasil Akhir</span>
-                      <div className="mt-1">{getResultBadge(gameDetail.result)}</div>
+                    <div className="bg-slate-950/30 border border-slate-850 rounded-xl px-3 py-1.5 flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Hasil</span>
+                      <div className="mt-0.5">{getResultBadge(gameDetail.result)}</div>
                     </div>
 
                     {/* White Accuracy */}
-                    <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl px-5 py-3 flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Akurasi Putih</span>
-                      <span className={`text-xl font-extrabold font-serif mt-1 ${
+                    <div className="bg-slate-950/30 border border-slate-850 rounded-xl px-3 py-1.5 flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Akurasi W</span>
+                      <span className={`text-sm font-extrabold font-serif mt-0.5 ${
                         (gameDetail.white_accuracy ?? 0) >= 80 ? 'text-emerald-400' : (gameDetail.white_accuracy ?? 0) >= 60 ? 'text-amber-400' : 'text-rose-400'
                       }`}>
                         {gameDetail.white_accuracy !== null ? `${gameDetail.white_accuracy.toFixed(1)}%` : '-'}
@@ -373,9 +432,9 @@ export default function HistoryPage() {
                     </div>
 
                     {/* Black Accuracy */}
-                    <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl px-5 py-3 flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Akurasi Hitam</span>
-                      <span className={`text-xl font-extrabold font-serif mt-1 ${
+                    <div className="bg-slate-950/30 border border-slate-850 rounded-xl px-3 py-1.5 flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Akurasi B</span>
+                      <span className={`text-sm font-extrabold font-serif mt-0.5 ${
                         (gameDetail.black_accuracy ?? 0) >= 80 ? 'text-emerald-400' : (gameDetail.black_accuracy ?? 0) >= 60 ? 'text-amber-400' : 'text-rose-400'
                       }`}>
                         {gameDetail.black_accuracy !== null ? `${gameDetail.black_accuracy.toFixed(1)}%` : '-'}
@@ -384,27 +443,28 @@ export default function HistoryPage() {
                   </div>
                 </div>
 
-                {/* Workspace grid: Board (col 1) & Sidebar (col 2) */}
-                <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
+                {/* Sub-Workspace grid: Board (col 1) & Sidebar (col 2) */}
+                <div className="flex-1 flex flex-col lg:flex-row gap-5 min-h-0 items-stretch justify-center overflow-hidden">
                   
                   {/* Column 1: Board + controls */}
-                  <div className="flex flex-col items-center gap-4 w-full max-w-[540px]">
+                  <div className="flex flex-col items-center gap-3 w-full lg:w-[480px] xl:w-[500px] shrink-0 justify-between min-h-0">
                     
                     {/* Opponent Label Card */}
-                    <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-slate-500 border border-slate-400" />
-                        <span className="font-semibold text-sm text-slate-200">
+                    <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl px-4 py-1.5 flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-500 border border-slate-400" />
+                        <span className="font-semibold text-xs text-slate-200">
                           {gameDetail.black} (Hitam)
                         </span>
                       </div>
                     </div>
 
-                    {/* Board + EvalBar */}
-                    <div className="w-full flex items-stretch gap-3">
-                      <EvalBar score={getCurrentScore()} />
-                      <div className="flex-1 min-w-0 aspect-square">
+                    {/* Board + EvalBar container */}
+                    <div ref={boardContainerRef} className="flex-1 w-full min-h-0 flex items-center justify-center gap-3">
+                      <div style={{ height: boardSize }} className="flex items-stretch gap-3 justify-center">
+                        <EvalBar score={getCurrentScore()} />
                         <Board
+                          boardWidth={boardSize}
                           position={(currentMoveIndex + 1 >= 0 && currentMoveIndex + 1 < fens.length && fens[currentMoveIndex + 1]) || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
                           playerColor="white"
                           readOnly={true}
@@ -413,55 +473,55 @@ export default function HistoryPage() {
                     </div>
 
                     {/* Player Label Card */}
-                    <div className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-slate-200 shadow" />
-                        <span className="font-semibold text-sm text-slate-200">
+                    <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl px-4 py-1.5 flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-250 shadow" />
+                        <span className="font-semibold text-xs text-slate-200">
                           {gameDetail.white} (Putih)
                         </span>
                       </div>
                     </div>
 
                     {/* Replay navigation buttons below board */}
-                    <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md">
-                      <div className="flex items-center gap-3">
+                    <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl p-3 flex flex-col items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap justify-center">
                         <button
                           onClick={handleFirst}
                           disabled={currentMoveIndex === -1}
-                          className="px-3.5 py-2 text-sm bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 font-bold"
+                          className="px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700/80 text-slate-200 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 font-bold flex items-center gap-1 shrink-0"
                           title="Kembali ke awal (Home)"
                         >
-                          ⏮ First
+                          <ChevronsLeft className="w-3.5 h-3.5" /> First
                         </button>
                         <button
                           onClick={handlePrev}
                           disabled={currentMoveIndex === -1}
-                          className="px-5 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:text-slate-500 active:scale-95 font-bold"
+                          className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed disabled:text-slate-500 active:scale-95 font-bold flex items-center gap-1 shrink-0"
                           title="Langkah sebelumnya (Panah Kiri)"
                         >
-                          ← Prev
+                          <ChevronLeft className="w-3.5 h-3.5" /> Prev
                         </button>
-                        <span className="text-xs font-mono font-bold text-slate-400 bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 min-w-[70px] text-center">
+                        <span className="text-[11px] font-mono font-bold text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-md border border-slate-800 min-w-[65px] text-center">
                           {currentMoveIndex + 1} / {gameDetail.moves.length}
                         </span>
                         <button
                           onClick={handleNext}
                           disabled={currentMoveIndex === gameDetail.moves.length - 1}
-                          className="px-5 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:text-slate-500 active:scale-95 font-bold"
+                          className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-slate-950 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed disabled:text-slate-500 active:scale-95 font-bold flex items-center gap-1 shrink-0"
                           title="Langkah berikutnya (Panah Kanan)"
                         >
-                          Next →
+                          Next <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={handleLast}
                           disabled={currentMoveIndex === gameDetail.moves.length - 1}
-                          className="px-3.5 py-2 text-sm bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 font-bold"
+                          className="px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700/80 text-slate-200 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 font-bold flex items-center gap-1 shrink-0"
                           title="Loncat ke akhir (End)"
                         >
-                          Last ⏭
+                          Last <ChevronsRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <p className="text-[10px] text-slate-500 font-medium tracking-tight">
+                      <p className="text-[9px] text-slate-500 font-medium hidden sm:block">
                         Tips: Gunakan tombol keyboard <span className="font-bold border border-slate-800 px-1 py-0.2 rounded bg-slate-950 text-slate-400">←</span> dan <span className="font-bold border border-slate-800 px-1 py-0.2 rounded bg-slate-950 text-slate-400">→</span> untuk navigasi cepat.
                       </p>
                     </div>
@@ -469,45 +529,44 @@ export default function HistoryPage() {
                   </div>
 
                   {/* Column 2: Sidebar (Move Info Card + MoveList) */}
-                  <div className="flex-1 w-full lg:max-w-[450px] flex flex-col gap-6">
+                  <div className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden min-h-0">
                     
                     {/* Active Move Detail Explanation Card */}
-                    <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
-                      
+                    <div className="bg-slate-900/40 border border-slate-800/60 rounded-xl p-4 flex flex-col gap-3 shrink-0">
                       {activeMove ? (
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex flex-col gap-2.5">
+                          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                             <div>
-                              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Evaluasi Langkah</h3>
-                              <p className="text-lg font-bold font-serif text-indigo-500 mt-0.5">
+                              <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Evaluasi Langkah</h3>
+                              <p className="text-base font-bold font-serif text-indigo-400 mt-0.5">
                                 {activeMove.move_number}{activeMove.is_white ? '.' : '...'} {activeMove.san}
                               </p>
                             </div>
-                            <div className="flex flex-col items-end gap-1.5">
+                            <div className="flex flex-col items-end gap-1 shrink-0">
                               {renderActiveMoveBadge(activeMove.label)}
-                              <span className="text-[10px] font-serif font-extrabold bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-400">
+                              <span className="text-[9px] font-serif font-extrabold bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-slate-400">
                                 Eval: {formatScore(activeMove.score_after)}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-2">
-                            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Penjelasan</p>
-                            <p className="text-sm text-slate-200 leading-relaxed font-medium">
+                          <div className="flex flex-col gap-1">
+                            <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Penjelasan</p>
+                            <p className="text-xs text-slate-200 leading-relaxed font-medium max-h-[72px] overflow-y-auto pr-1 scrollbar-thin">
                               {activeMove.explanation || 'Langkah ini tidak memiliki penjelasan tambahan dari engine.'}
                             </p>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 mt-1.5 pt-3 border-t border-slate-800/80">
-                            <div className="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/50">
-                              <span className="text-[9px] font-bold text-slate-500 uppercase">Eval Sebelum</span>
-                              <span className="block text-sm font-extrabold text-slate-350 font-serif mt-0.5">
+                          <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800/60">
+                            <div className="bg-slate-950/30 rounded-lg p-2 border border-slate-800/40">
+                              <span className="text-[8px] font-bold text-slate-500 uppercase">Eval Sebelum</span>
+                              <span className="block text-xs font-extrabold text-slate-300 font-serif mt-0.5">
                                 {formatScore(activeMove.score_before)}
                               </span>
                             </div>
-                            <div className="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/50">
-                              <span className="text-[9px] font-bold text-slate-500 uppercase">Perubahan Eval</span>
-                              <span className={`block text-sm font-extrabold font-serif mt-0.5 ${
+                            <div className="bg-slate-950/30 rounded-lg p-2 border border-slate-800/40">
+                              <span className="text-[8px] font-bold text-slate-500 uppercase">Perubahan Eval</span>
+                              <span className={`block text-xs font-extrabold font-serif mt-0.5 ${
                                 activeMove.score_after !== null && activeMove.score_before !== null
                                   ? (activeMove.is_white
                                       ? (activeMove.score_after - activeMove.score_before >= 0 ? 'text-emerald-400' : 'text-rose-400')
@@ -524,25 +583,27 @@ export default function HistoryPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="py-6 text-center flex flex-col items-center gap-2">
-                          <span className="text-3xl text-slate-600">♟</span>
+                        <div className="py-4 text-center flex flex-col items-center gap-1.5">
+                          <Info className="w-6 h-6 text-slate-600 shrink-0" />
                           <div>
-                            <h3 className="font-bold text-slate-300">Posisi Awal Game</h3>
-                            <p className="text-xs text-slate-500 mt-1 max-w-[280px]">
+                            <h3 className="text-xs font-bold text-slate-300">Posisi Awal Game</h3>
+                            <p className="text-[10px] text-slate-500 mt-0.5 max-w-[240px] leading-normal">
                               Replay game dengan menekan tombol navigasi di bawah papan atau klik langsung salah satu langkah di Move List.
                             </p>
                           </div>
                         </div>
                       )}
-
                     </div>
 
-                    {/* Interactive MoveList */}
-                    <MoveList
-                      moves={mappedMovesForList}
-                      activeMoveIndex={currentMoveIndex}
-                      onMoveClick={(idx) => setCurrentMoveIndex(idx)}
-                    />
+                    {/* Interactive MoveList Wrapper */}
+                    <div className="flex-1 min-h-0 bg-slate-900/30 border border-slate-800/80 rounded-xl overflow-hidden flex flex-col">
+                      <MoveList
+                        moves={mappedMovesForList}
+                        activeMoveIndex={currentMoveIndex}
+                        onMoveClick={(idx) => setCurrentMoveIndex(idx)}
+                        noWrapper={true}
+                      />
+                    </div>
 
                   </div>
 
@@ -550,9 +611,9 @@ export default function HistoryPage() {
 
               </div>
             ) : null}
-
           </div>
-        )}
+
+        </div>
 
       </div>
     </div>

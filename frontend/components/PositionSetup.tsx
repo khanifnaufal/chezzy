@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
+import { HelpCircle, Lightbulb, AlertTriangle, RotateCcw, Check } from 'lucide-react';
 
 interface PositionSetupProps {
   onLoadPosition: (fen: string) => void;
@@ -83,13 +84,13 @@ export default function PositionSetup({ onLoadPosition, onBack }: PositionSetupP
             FEN String
           </label>
           <div className="relative group cursor-help">
-            <span className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-md font-bold">
-              ❔ Apa itu FEN?
+            <span className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-md font-bold inline-flex items-center gap-1">
+              <HelpCircle className="w-3.5 h-3.5 shrink-0" /> Apa itu FEN?
             </span>
             {/* Tooltip Card */}
             <div className="absolute right-0 top-full mt-2 w-72 bg-slate-950/95 border border-indigo-500/30 rounded-2xl p-4 flex flex-col gap-1.5 text-xs text-indigo-200/90 leading-relaxed shadow-2xl z-50 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 transform origin-top-right backdrop-blur-md">
               <div className="flex items-center gap-1.5 font-bold text-indigo-300">
-                <span>💡</span> Apa itu FEN?
+                <Lightbulb className="w-4 h-4 text-indigo-400 shrink-0" /> Apa itu FEN?
               </div>
               <p>
                 <strong>FEN (Forsyth-Edwards Notation)</strong> adalah kode teks standar yang menggambarkan susunan perwira di atas papan catur secara lengkap.
@@ -113,8 +114,8 @@ export default function PositionSetup({ onLoadPosition, onBack }: PositionSetupP
           }`}
         />
         {error && (
-          <span className="text-[11px] text-rose-400 font-medium bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20 animate-fade-in">
-            ⚠️ {error}
+          <span className="text-[11px] text-rose-400 font-medium bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20 animate-fade-in flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" /> {error}
           </span>
         )}
       </div>
@@ -154,18 +155,18 @@ export default function PositionSetup({ onLoadPosition, onBack }: PositionSetupP
           <button
             id="btn-fen-reset"
             onClick={handleReset}
-            className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 font-bold text-xs rounded-2xl border border-slate-700 hover:border-slate-600 transition active:scale-95 duration-100"
+            className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 font-bold text-xs rounded-2xl border border-slate-700 hover:border-slate-600 transition active:scale-95 duration-100 flex items-center justify-center gap-1.5"
           >
-            ↺ Reset Posisi
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" /> Reset Posisi
           </button>
           
           <button
             id="btn-fen-load"
             onClick={handleLoad}
             disabled={!!error || !fenInput.trim()}
-            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:from-indigo-950 disabled:to-violet-950 text-slate-100 disabled:text-slate-500 font-bold text-xs rounded-2xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 disabled:shadow-none transition active:scale-95 duration-100 disabled:cursor-not-allowed border border-indigo-500/20 disabled:border-none"
+            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:from-indigo-950 disabled:to-violet-950 text-slate-100 disabled:text-slate-500 font-bold text-xs rounded-2xl shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 disabled:shadow-none transition active:scale-95 duration-100 disabled:cursor-not-allowed border border-indigo-500/20 disabled:border-none flex items-center justify-center gap-1.5"
           >
-            ✓ Load Posisi
+            <Check className="w-3.5 h-3.5 shrink-0" /> Load Posisi
           </button>
         </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, Check, CheckCheck, AlertTriangle, X, Skull, Lightbulb } from 'lucide-react';
 
 export interface OpponentAnalysis {
   label: string;
@@ -101,34 +102,38 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
     const norm = label.toLowerCase();
     let bg = 'bg-slate-800 text-slate-400 border-slate-700';
     let text = label;
-    let icon = '';
+    let icon: React.ReactNode = null;
 
     if (norm === 'brilliant') {
       bg = 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[0_0_8px_rgba(168,85,247,0.15)]';
       text = 'Brilliant';
-      icon = '✨';
-    } else if (norm === 'good' || norm === 'excellent') {
+      icon = <Sparkles className="w-3 h-3 shrink-0" />;
+    } else if (norm === 'excellent') {
+      bg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]';
+      text = 'Excellent';
+      icon = <CheckCheck className="w-3 h-3 shrink-0" />;
+    } else if (norm === 'good') {
       bg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]';
       text = 'Good';
-      icon = '✓';
+      icon = <Check className="w-3 h-3 shrink-0" />;
     } else if (norm === 'inaccuracy') {
       bg = 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_8px_rgba(234,179,8,0.15)]';
       text = 'Inaccuracy';
-      icon = '⚠';
+      icon = <AlertTriangle className="w-3 h-3 shrink-0" />;
     } else if (norm === 'mistake') {
       bg = 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]';
       text = 'Mistake';
-      icon = '✗';
+      icon = <X className="w-3 h-3 shrink-0" />;
     } else if (norm === 'blunder') {
       bg = 'bg-rose-500/10 text-rose-400 border-rose-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]';
       text = 'Blunder';
-      icon = '✗✗';
+      icon = <Skull className="w-3 h-3 shrink-0" />;
     }
 
     return (
-      <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-semibold select-none ${bg}`}>
+      <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-semibold select-none ${bg}`}>
         <span>{text}</span>
-        {icon && <span className="text-[9px] ml-0.5">{icon}</span>}
+        {icon}
       </span>
     );
   };
@@ -273,13 +278,13 @@ const MoveList: React.FC<MoveListProps> = ({ moves, activeMoveIndex = -1, onMove
             <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800/80">
               {threat && (
                 <div className="text-amber-400 font-semibold flex items-start gap-1">
-                  <span className="shrink-0 text-amber-500">⚠</span>
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>Ancaman: <span className="font-normal text-slate-200">{threat}</span></span>
                 </div>
               )}
               {bestResponse && (
                 <div className="text-emerald-400 font-semibold flex items-start gap-1">
-                  <span className="shrink-0 text-emerald-500">💡</span>
+                  <Lightbulb className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                   <span>Respons terbaik: <span className="font-bold font-mono text-slate-100">{bestResponse}</span></span>
                 </div>
               )}

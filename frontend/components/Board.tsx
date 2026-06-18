@@ -186,7 +186,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
             }
           } else if (data.type === 'game_over') {
             // Toast notification: game saved
-            toast.success("✓ Game tersimpan");
+            toast.success("Game tersimpan");
             
             // Forward game_over as a special move result to the parent
             if (onMoveResultRef.current) {
@@ -208,7 +208,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
           } else if (data.type === 'error') {
             console.error('WebSocket game error:', data.message);
             if (data.message === "Illegal move" || data.message === "Illegal move.") {
-              toast.error("✗ Move ilegal");
+              toast.error("Move ilegal");
             } else {
               toast.error(`Error: ${data.message}`);
             }
@@ -340,11 +340,11 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
         }
         return true;
       } else {
-        toast.error(" Move ilegal");
+        toast.error("Move ilegal");
       }
     } catch (error) {
       console.warn('Move validation failed locally:', error);
-      toast.error(" Move ilegal");
+      toast.error("Move ilegal");
     }
     return false;
   };

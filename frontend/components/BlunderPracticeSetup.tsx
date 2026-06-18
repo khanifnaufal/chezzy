@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { BASE_URL } from '../lib/api';
+import { AlertTriangle, Trophy } from 'lucide-react';
 
 export interface BlunderPosition {
   game_id: string;
@@ -71,12 +72,12 @@ export default function BlunderPracticeSetup({ onLoadPosition, onBack }: Blunder
           <span className="text-xs text-slate-400 animate-pulse font-medium">Memuat daftar blunder...</span>
         </div>
       ) : error ? (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs rounded-2xl text-center font-medium">
-          ⚠️ {error}
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs rounded-2xl text-center font-medium flex items-center justify-center gap-1.5">
+          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" /> {error}
         </div>
       ) : blunderPositions.length === 0 ? (
         <div className="py-12 bg-slate-950/40 border border-slate-800/60 rounded-3xl p-6 text-center flex flex-col items-center gap-2">
-          <span className="text-3xl">🎉</span>
+          <Trophy className="w-10 h-10 text-amber-400 mb-1 animate-bounce" />
           <p className="text-sm font-bold text-slate-300">Hebat! Belum ada blunder tercatat</p>
           <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
             Mainkan game Solo Analisis atau VS Bot terlebih dahulu. Setiap kesalahan (Mistake / Blunder) yang Anda buat akan otomatis disimpan ke sini.
