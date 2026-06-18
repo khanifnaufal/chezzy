@@ -15,8 +15,8 @@ const lora = Lora({
 });
 
 export const metadata: Metadata = {
-  title: 'CHEZZY',
-  description: 'Interactive Chess Analyzer with Stockfish Engine',
+  title: 'CHEZZY — AI Chess Analyzer',
+  description: 'Elevate your chess with real-time Stockfish analysis. Get move classifications, threat detection, and strategic recommendations for every position.',
 };
 
 export default function RootLayout({
