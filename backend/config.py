@@ -15,3 +15,13 @@ except (ValueError, TypeError):
 
 # DATABASE_URL: PostgreSQL connection URL (e.g., postgresql://user:password@localhost:5432/db)
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
+
+# SUPABASE_URL: URL of Supabase project
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().strip('"').strip("'")
+
+# SUPABASE_KEY: Secret key (service_role format or sb_secret_xxx)
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip().strip('"').strip("'")
+
+# SUPABASE_JWT_SECRET: Secret key for decoding user JWT
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip().strip('"').strip("'")
+

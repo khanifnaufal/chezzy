@@ -6,3 +6,5 @@ sqlalchemy
 asyncpg
 psycopg2-binary
 python-dotenv
+supabase
+PyJWT
