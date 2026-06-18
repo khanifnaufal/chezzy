@@ -1,0 +1,38 @@
+<svg viewBox="0 0 100 100" width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Rounded card mask -->
+    <clipPath id="card-clip">
+      <rect x="5" y="5" width="90" height="90" rx="18" />
+    </clipPath>
+    <!-- Negative space diagonal cuts -->
+    <clipPath id="top-right-half">
+      <polygon points="-10,-10 110,-10 110,110 Z" />
+    </clipPath>
+    <clipPath id="bottom-left-half">
+      <polygon points="-10,-10 -10,110 110,110 Z" />
+    </clipPath>
+    <!-- Stylized Knight Path -->
+    <path id="knight" d="M 38 75 L 30 55 L 24 55 L 20 48 L 20 42 L 35 36 L 45 20 L 50 28 L 58 28 L 58 40 L 66 40 L 66 54 L 74 54 L 74 75 L 74 80 L 78 80 L 78 85 L 22 85 L 22 80 L 26 80 L 26 75 Z" />
+  </defs>
+
+  <!-- Card body with clips -->
+  <g clip-path="url(#card-clip)">
+    <!-- White background for bottom-left -->
+    <rect x="5" y="5" width="90" height="90" fill="#FFFFFF" />
+    <!-- Black background for top-right -->
+    <polygon points="5,5 95,5 95,95 Z" fill="#020617" />
+    
+    <!-- Knight on White background (bottom-left) -> Black Knight -->
+    <g clip-path="url(#bottom-left-half)">
+      <use href="#knight" fill="#020617" />
+    </g>
+    <!-- Knight on Black background (top-right) -> White Knight -->
+    <g clip-path="url(#top-right-half)">
+      <use href="#knight" fill="#FFFFFF" />
+    </g>
+  </g>
+  
+  <!-- Outer border & diagonal line to tie it together -->
+  <rect x="5" y="5" width="90" height="90" rx="18" fill="none" stroke="#020617" stroke-width="4" />
+  <line x1="5" y1="5" x2="95" y2="95" stroke="#020617" stroke-width="3" />
+</svg>

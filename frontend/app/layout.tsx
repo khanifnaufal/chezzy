@@ -15,7 +15,7 @@ const lora = Lora({
 });
 
 export const metadata: Metadata = {
-  title: 'Chezzy Chess Analyzer',
+  title: 'CHEZZY',
   description: 'Interactive Chess Analyzer with Stockfish Engine',
 };
 

@@ -410,7 +410,7 @@ export default function DashboardPage() {
               <span className="text-xl shrink-0">💡</span>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  Rekomendasi Analis Chezzy
+                  Rekomendasi Analis CHEZZY
                 </span>
                 <p className="text-sm text-slate-300 font-medium leading-relaxed">
                   {phase_weakness.insight}

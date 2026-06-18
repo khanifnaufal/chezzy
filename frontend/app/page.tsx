@@ -12,6 +12,7 @@ import BlunderPracticeSetup, { BlunderPosition } from '../components/BlunderPrac
 import { startGame, resignGame } from '../lib/api';
 import { Recommendation, Game, GameOverEvent } from '../lib/types';
 import { Chess } from 'chess.js';
+import Image from 'next/image';
 
 const queryClient = new QueryClient();
 
@@ -623,28 +624,36 @@ function ChessAnalyzerApp() {
       {/* Main Workspace */}
       <main className={activeGame
         ? "flex-1 w-full max-w-7xl px-6 py-4 flex flex-col min-h-0 justify-between overflow-hidden"
-        : "flex-1 w-full max-w-7xl px-4 py-8 flex items-center justify-center"
+        : "flex-1 w-full max-w-7xl px-4 py-8 flex flex-col items-center justify-center overflow-y-auto"
       }>
         {!activeGame ? (
           /* Landing Page */
-          <div className="text-center max-w-2xl px-6 py-16 bg-slate-900/40 rounded-3xl border border-slate-800/80 backdrop-blur-2xl shadow-2xl flex flex-col items-center gap-6 mt-8 animate-fade-in">
-            <div className="w-20 h-20 rounded-2xl bg-indigo-600/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500 font-black text-4xl mb-2 shadow-2xl">
-              ♞
+          <>
+            <div className="text-center max-w-2xl px-6 py-16 bg-slate-900/40 rounded-3xl border border-slate-800/80 backdrop-blur-2xl shadow-2xl flex flex-col items-center gap-6 mt-8 animate-fade-in">
+              <div className="relative w-20 h-20 flex items-center justify-center mb-2">
+                <Image
+                  src="/logos/logo_concept3_arrow_knight.svg"
+                  alt="CHEZZY Logo"
+                  width={80}
+                  height={80}
+                  className="object-contain"
+                />
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-serif font-extrabold text-slate-100">
+                Analisis Catur dengan Heuristik Stockfish
+              </h2>
+              <p className="text-slate-400 leading-relaxed text-sm sm:text-base">
+                Tingkatkan taktik dan strategi catur Anda secara real-time. Dapatkan penjelasan rinci beserta analisis risiko untuk setiap langkah terbaik yang disarankan oleh Stockfish.
+              </p>
+              <button
+                id="btn-new-game-landing"
+                onClick={openNewGameModal}
+                className="mt-4 px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-950 font-serif font-black rounded-2xl shadow-xl shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 duration-150"
+              >
+                New Game
+              </button>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-serif font-extrabold text-slate-100">
-              Analisis Catur dengan Heuristik Stockfish
-            </h2>
-            <p className="text-slate-400 leading-relaxed text-sm sm:text-base">
-              Tingkatkan taktik dan strategi catur Anda secara real-time. Dapatkan penjelasan rinci beserta analisis risiko untuk setiap langkah terbaik yang disarankan oleh Stockfish.
-            </p>
-            <button
-              id="btn-new-game-landing"
-              onClick={openNewGameModal}
-              className="mt-4 px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-slate-950 font-serif font-black rounded-2xl shadow-xl shadow-indigo-600/20 hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 duration-150"
-            >
-              New Game
-            </button>
-          </div>
+          </>
         ) : (
           /* Active Board Workspace */
           <div className="flex-1 min-h-0 w-full flex flex-col gap-4 items-center justify-between">
@@ -874,7 +883,7 @@ function ChessAnalyzerApp() {
       {/* Footer */}
       {!activeGame && (
         <footer className="w-full border-t border-slate-900/50 py-4 text-center text-xs text-slate-600 max-w-7xl shrink-0">
-          Chezzy Analyzer v1.0.0 &copy; 2026. Powered by Stockfish engine.
+          CHEZZY v1.0.0 &copy; 2026. Powered by Stockfish engine.
         </footer>
       )}
 

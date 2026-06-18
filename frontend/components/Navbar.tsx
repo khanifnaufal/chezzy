@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -18,11 +19,17 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
         {/* Logo and title */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-serif font-black text-lg text-slate-950 shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition">
-            C
+          <div className="relative w-8 h-8 group-hover:scale-105 transition flex items-center justify-center">
+            <Image
+              src="/logos/logo_concept3_arrow_knight.svg"
+              alt="CHEZZY Logo"
+              width={32}
+              height={32}
+              className="object-contain"
+            />
           </div>
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-violet-500 bg-clip-text text-transparent group-hover:from-indigo-300 group-hover:to-violet-400 transition font-serif">
-            Chezzy Chess Analyzer
+          <h1 className="text-xl font-black tracking-wider bg-gradient-to-r from-indigo-400 to-violet-500 bg-clip-text text-transparent group-hover:from-indigo-300 group-hover:to-violet-400 transition font-serif">
+            CHEZZY
           </h1>
         </Link>
 
