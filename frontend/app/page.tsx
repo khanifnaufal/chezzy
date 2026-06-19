@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../lib/auth-context';
 import { motion, useInView, type Variants } from 'framer-motion';
 import { useRef, useEffect, useState } from 'react';
 import Image from 'next/image';
@@ -198,7 +199,16 @@ function FloatingPiece({ piece, style }: { piece: string; style: React.CSSProper
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function LandingPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const heroRef = useRef<HTMLDivElement>(null);
+
+  const handleNewGame = () => {
+    if (!user) {
+      router.push('/login');
+    } else {
+      router.push('/game?newgame=true');
+    }
+  };
 
   const FLOATING_PIECES = [
     { piece: '♔', style: { top: '10%', left: '5%', fontSize: '5rem' } },
@@ -287,7 +297,7 @@ export default function LandingPage() {
           <motion.div variants={fadeUp} className="flex items-center gap-4 w-full sm:w-auto">
             <motion.button
               id="btn-landing-new-game"
-              onClick={() => router.push('/game?newgame=true')}
+              onClick={handleNewGame}
               whileHover={{ scale: 1.05, y: -3 }}
               whileTap={{ scale: 0.96 }}
               className="relative px-8 py-4 rounded-2xl font-serif font-black text-base overflow-hidden group"
@@ -587,7 +597,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <motion.button
               id="btn-cta-new-game"
-              onClick={() => router.push('/game?newgame=true')}
+              onClick={handleNewGame}
               whileHover={{ scale: 1.06, y: -4 }}
               whileTap={{ scale: 0.96 }}
               className="px-10 py-5 rounded-2xl font-serif font-black text-lg relative overflow-hidden group"

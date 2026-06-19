@@ -17,6 +17,7 @@ def get_player_moves(db: DbSession):
     """
     Helper untuk mengambil semua moves yang dimainkan oleh HUMAN player (bukan Bot) dari semua game.
     Mendeteksi warna pemain dari tabel Session atau fallback dari nama pemain.
+    Menggunakan batch query untuk menghindari masalah N+1 query.
     """
     games = db.query(Game).all()
     if not games:
@@ -25,7 +26,7 @@ def get_player_moves(db: DbSession):
     sessions = db.query(SessionModel).all()
     game_player_colors = {s.game_id: s.player_color for s in sessions if s.game_id}
 
-    player_moves = []
+    game_white_flags = {}
     for game in games:
         player_color = game_player_colors.get(game.id)
         if not player_color:
@@ -36,13 +37,17 @@ def get_player_moves(db: DbSession):
                 player_color = "white"
             else:
                 player_color = "white"
+        game_white_flags[game.id] = (player_color == "white")
 
-        is_white_flag = (player_color == "white")
-        moves = db.query(MoveRecord).filter(
-            MoveRecord.game_id == game.id,
-            MoveRecord.is_white == is_white_flag
-        ).all()
-        player_moves.extend(moves)
+    # Ambil semua moves untuk game-game ini dalam 1 kueri tunggal
+    game_ids = list(game_white_flags.keys())
+    all_moves = db.query(MoveRecord).filter(MoveRecord.game_id.in_(game_ids)).all()
+
+    # Filter move milik player di memori
+    player_moves = [
+        m for m in all_moves
+        if m.is_white == game_white_flags.get(m.game_id)
+    ]
 
     return player_moves
 

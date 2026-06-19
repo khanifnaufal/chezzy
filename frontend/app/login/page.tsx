@@ -42,7 +42,7 @@ export default function LoginPage() {
         setErrorMsg(friendlyMessage);
         toast.error(friendlyMessage);
       } else {
-        toast.success('Login berhasil! Mengalihkan...');
+        toast.success('Login berhasil!');
         // Redirect to homepage
         router.push('/');
         router.refresh();
