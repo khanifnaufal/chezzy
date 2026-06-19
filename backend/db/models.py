@@ -19,6 +19,7 @@ class Game(Base):
     pgn_raw        = Column(Text, nullable=True)
     white_accuracy = Column(Float, nullable=True)
     black_accuracy = Column(Float, nullable=True)
+    user_id        = Column(String, nullable=True)
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
 
     moves    = relationship("MoveRecord", back_populates="game", cascade="all, delete-orphan")
