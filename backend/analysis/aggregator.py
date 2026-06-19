@@ -1,29 +1,29 @@
 from sqlalchemy.orm import Session as DbSession
 from backend.db.models import Game, MoveRecord, Session as SessionModel
 
-def get_all_moves(db: DbSession, player_color: str = None):
+def get_all_moves(db: DbSession, user_id: str, player_color: str = None):
     """
-    Mengambil semua moves dari semua game.
+    Mengambil semua moves dari semua game milik user_id tertentu.
     Jika player_color ditentukan ('white' atau 'black'),
     hanya mengambil moves yang dimainkan oleh warna tersebut.
     """
-    query = db.query(MoveRecord)
+    query = db.query(MoveRecord).join(Game).filter(Game.user_id == user_id)
     if player_color:
         is_white_val = (player_color.lower() == "white")
         query = query.filter(MoveRecord.is_white == is_white_val)
     return query.all()
 
-def get_player_moves(db: DbSession):
+def get_player_moves(db: DbSession, user_id: str):
     """
-    Helper untuk mengambil semua moves yang dimainkan oleh HUMAN player (bukan Bot) dari semua game.
+    Helper untuk mengambil semua moves yang dimainkan oleh HUMAN player (bukan Bot) dari semua game milik user_id.
     Mendeteksi warna pemain dari tabel Session atau fallback dari nama pemain.
     Menggunakan batch query untuk menghindari masalah N+1 query.
     """
-    games = db.query(Game).all()
+    games = db.query(Game).filter(Game.user_id == user_id).all()
     if not games:
         return []
 
-    sessions = db.query(SessionModel).all()
+    sessions = db.query(SessionModel).join(Game).filter(Game.user_id == user_id).all()
     game_player_colors = {s.game_id: s.player_color for s in sessions if s.game_id}
 
     game_white_flags = {}
@@ -51,26 +51,26 @@ def get_player_moves(db: DbSession):
 
     return player_moves
 
-def get_moves_by_phase(db: DbSession, phase: str):
+def get_moves_by_phase(db: DbSession, user_id: str, phase: str):
     """
-    Mengambil semua moves yang dimainkan oleh player pada fase tertentu (opening/middlegame/endgame).
+    Mengambil semua moves yang dimainkan oleh player pada fase tertentu (opening/middlegame/endgame) milik user_id.
     """
-    player_moves = get_player_moves(db)
+    player_moves = get_player_moves(db, user_id)
     return [m for m in player_moves if m.phase == phase]
 
-def get_blunders(db: DbSession):
+def get_blunders(db: DbSession, user_id: str):
     """
-    Mengambil semua moves yang dimainkan oleh player dengan label Mistake atau Blunder.
+    Mengambil semua moves yang dimainkan oleh player dengan label Mistake atau Blunder milik user_id.
     """
-    player_moves = get_player_moves(db)
+    player_moves = get_player_moves(db, user_id)
     return [m for m in player_moves if m.label in ("Mistake", "Blunder")]
 
-def get_accuracy_trend(db: DbSession):
+def get_accuracy_trend(db: DbSession, user_id: str):
     """
-    Mengambil daftar akurasi game player urut berdasarkan tanggal game (lama ke baru).
+    Mengambil daftar akurasi game player urut berdasarkan tanggal game (lama ke baru) milik user_id.
     """
-    games = db.query(Game).order_by(Game.date.asc()).all()
-    sessions = db.query(SessionModel).all()
+    games = db.query(Game).filter(Game.user_id == user_id).order_by(Game.date.asc()).all()
+    sessions = db.query(SessionModel).join(Game).filter(Game.user_id == user_id).all()
     game_player_colors = {s.game_id: s.player_color for s in sessions if s.game_id}
 
     trend = []
@@ -92,11 +92,11 @@ def get_accuracy_trend(db: DbSession):
             "date": game.date.isoformat() if game.date else None,
             "game_id": game.id,
             "accuracy": accuracy
-        })
+          })
     return trend
 
-def get_game_count(db: DbSession):
+def get_game_count(db: DbSession, user_id: str):
     """
-    Mengambil total game yang tersimpan di database.
+    Mengambil total game yang tersimpan di database milik user_id.
     """
-    return db.query(Game).count()
+    return db.query(Game).filter(Game.user_id == user_id).count()

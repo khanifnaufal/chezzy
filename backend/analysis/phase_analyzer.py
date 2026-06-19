@@ -1,12 +1,12 @@
 from sqlalchemy.orm import Session as DbSession
 from backend.analysis.aggregator import get_player_moves
 
-def analyze_phase_weakness(db: DbSession):
+def analyze_phase_weakness(db: DbSession, user_id: str):
     """
     Menganalisis performa player pada setiap fase (opening/middlegame/endgame).
     Mengembalikan statistik akurasi, blunder, mistake, serta fase terlemah dan insight natural language.
     """
-    player_moves = get_player_moves(db)
+    player_moves = get_player_moves(db, user_id)
 
     phases = {
         "opening": {"losses": [], "blunders": 0, "mistakes": 0},

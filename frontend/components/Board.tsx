@@ -5,6 +5,7 @@ import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { WS_URL } from '../lib/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../lib/auth-context';
 
 export interface BoardRef {
   sendMove: (move: { from: string; to: string; promotion?: string; uci?: string }) => void;
@@ -44,6 +45,7 @@ interface BoardProps {
 }
 
 const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, sessionId, onMoveResult, highlightSquares, gameMode = 'bot', readOnly = false, onConnectionStatusChange, onNewMove, boardWidth }, ref) => {
+  const { session } = useAuth();
   const [game, setGame] = useState(() => new Chess(position));
   const [currentFen, setCurrentFen] = useState(position);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
@@ -110,7 +112,8 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
     } else if (parsedWsUrl.startsWith('https://')) {
       parsedWsUrl = parsedWsUrl.replace('https://', 'wss://');
     }
-    const wsUrl = `${parsedWsUrl}/ws/game/${sessionId}`;
+    const token = session?.access_token || '';
+    const wsUrl = `${parsedWsUrl}/ws/game/${sessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
     function establishConnection() {
       if (readOnly || isIntentionalClose) return;
@@ -267,7 +270,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, playerColor, session
       }
       wsRef.current = null;
     };
-  }, [sessionId, readOnly]);
+  }, [sessionId, readOnly, session]);
 
   // Send a move through WebSocket
   const sendMoveViaWS = (move: { from: string; to: string; promotion?: string; uci?: string }) => {

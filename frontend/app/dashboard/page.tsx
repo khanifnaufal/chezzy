@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Lock, Compass, Swords, Crown, Lightbulb, Target, TrendingUp, TrendingDown, Minus, Play } from 'lucide-react';
+import { useAuth } from '../../lib/auth-context';
 import {
   LineChart,
   Line,
@@ -49,18 +50,23 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState<boolean>(false);
+  const { session } = useAuth();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!isMounted) return;
+    if (!isMounted || !session) return;
 
     async function fetchAnalysis() {
       try {
         setIsLoading(true);
-        const res = await fetch(`${BASE_URL}/api/analysis/patterns`);
+        const headers: HeadersInit = {};
+        if (session && session.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        const res = await fetch(`${BASE_URL}/api/analysis/patterns`, { headers });
         if (!res.ok) {
           throw new Error(`Failed to fetch analysis: ${res.statusText}`);
         }
@@ -75,7 +81,7 @@ export default function DashboardPage() {
     }
 
     fetchAnalysis();
-  }, [isMounted]);
+  }, [isMounted, session]);
 
   if (!isMounted) {
     return (

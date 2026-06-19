@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 from backend.db.database import get_db
 from backend.db.models import Game, Session as SessionModel, MoveRecord
 from backend.routers import ws as ws_module
+from backend.auth.dependencies import get_current_user
 
 logger = logging.getLogger("chess_analyzer")
 
@@ -60,7 +61,7 @@ class GameIdPath(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.post("/start")
-def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
+def start_game(request: StartGameRequest, db: DbSession = Depends(get_db), user_id: str = Depends(get_current_user)):
     """
     Buat session baru, inisialisasi board in-memory, dan simpan record ke DB.
     Returns session_id yang digunakan untuk koneksi WebSocket.
@@ -79,6 +80,7 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
         ws_module.active_games[session_id] = start_board
         ws_module.active_game_colors[session_id] = request.playerColor
         ws_module.active_move_counts[session_id] = 0
+        ws_module.active_game_users[session_id] = user_id
 
         # Simpan Game record ke DB
         game_row = Game(
@@ -86,6 +88,7 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db)):
             white_player=request.whitePlayer if request.playerColor == "white" else request.blackPlayer,
             black_player=request.blackPlayer if request.playerColor == "white" else request.whitePlayer,
             result=None,
+            user_id=user_id,
         )
         db.add(game_row)
 
@@ -184,12 +187,12 @@ games_router = APIRouter(prefix="/api/games", tags=["games"])
 
 
 @games_router.get("")
-def list_games(db: DbSession = Depends(get_db)):
+def list_games(db: DbSession = Depends(get_db), user_id: str = Depends(get_current_user)):
     """
-    List semua game yang tersimpan di database, diurutkan dari yang terbaru.
+    List semua game yang tersimpan di database milik user yang sedang login, diurutkan dari yang terbaru.
     """
     try:
-        games = db.query(Game).order_by(Game.date.desc()).all()
+        games = db.query(Game).filter(Game.user_id == user_id).order_by(Game.date.desc()).all()
         return [
             {
                 "game_id": g.id,
@@ -208,7 +211,7 @@ def list_games(db: DbSession = Depends(get_db)):
 
 
 @games_router.get("/{game_id}")
-def get_game_detail(game_id: str, db: DbSession = Depends(get_db)):
+def get_game_detail(game_id: str, db: DbSession = Depends(get_db), user_id: str = Depends(get_current_user)):
     """
     Detail satu game beserta daftar moves-nya.
     """
@@ -219,9 +222,9 @@ def get_game_detail(game_id: str, db: DbSession = Depends(get_db)):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        game = db.query(Game).filter(Game.id == game_id).first()
+        game = db.query(Game).filter(Game.id == game_id, Game.user_id == user_id).first()
         if not game:
-            raise HTTPException(status_code=404, detail="Game tidak ditemukan.")
+            raise HTTPException(status_code=404, detail="Game tidak ditemukan atau Anda tidak memiliki akses.")
 
         from backend.db.models import MoveRecord
         moves = db.query(MoveRecord).filter(MoveRecord.game_id == game_id).order_by(MoveRecord.id.asc()).all()
@@ -356,14 +359,14 @@ practice_router = APIRouter(prefix="/api/practice", tags=["practice"])
 
 
 @practice_router.get("/blunder-positions")
-def get_blunder_positions(db: DbSession = Depends(get_db)):
+def get_blunder_positions(db: DbSession = Depends(get_db), user_id: str = Depends(get_current_user)):
     """
     Mengambil semua moves dengan label "Blunder" atau "Mistake" dari database (pakai aggregator yang sudah ada),
     posisi SEBELUM blunder terjadi, dan informasi lainnya diurutkan dari yang paling baru.
     """
     try:
         from backend.analysis.aggregator import get_blunders
-        blunders = get_blunders(db)
+        blunders = get_blunders(db, user_id=user_id)
         
         # Urutkan blunders berdasarkan tanggal game (terbaru dahulu)
         blunders = sorted(

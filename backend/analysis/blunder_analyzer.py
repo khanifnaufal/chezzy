@@ -34,12 +34,12 @@ def classify_blunder(explanation: str, move_number: int) -> str:
 
     return "other"
 
-def analyze_blunder_patterns(db: DbSession):
+def analyze_blunder_patterns(db: DbSession, user_id: str):
     """
     Menganalisis pola blunder player dari semua game yang tersimpan.
     Membagi blunder ke dalam kategori taktis dan mengembalikan insight konkret.
     """
-    blunders_and_mistakes = get_blunders(db)
+    blunders_and_mistakes = get_blunders(db, user_id)
 
     breakdown = {
         "hanging_piece": 0,

@@ -3,10 +3,11 @@ import chess.pgn
 import logging
 import io
 from datetime import datetime, timezone
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session as DbSession
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
+from backend.auth.supabase_client import verify_token
 
 from backend.engine.evaluator import get_evaluation, get_top_moves, get_engine
 from backend.engine.labeler import label_move, get_phase
@@ -41,6 +42,7 @@ class WSMessage(BaseModel):
 active_games: dict[str, chess.Board] = {}
 active_game_colors: dict[str, str] = {}
 active_move_counts: dict[str, int] = {}   # counts half-moves (plies)
+active_game_users: dict[str, str] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -250,21 +252,35 @@ def get_move_explanation(label: str, h: dict, explanation: str, risk: str) -> st
 # ---------------------------------------------------------------------------
 
 @router.websocket("/ws/game/{session_id}")
-async def websocket_game(websocket: WebSocket, session_id: str):
+async def websocket_game(websocket: WebSocket, session_id: str, token: Optional[str] = Query(None)):
     await websocket.accept()
     logger.info(f"Client connected to WS game session: {session_id}")
+
+    if not token:
+        logger.warning(f"Rejected WS connection: session {session_id} - Token is missing.")
+        await websocket.close(code=4003)
+        return
+
+    try:
+        user_id = verify_token(token)
+    except ValueError as e:
+        logger.warning(f"Rejected WS connection: session {session_id} - Invalid token: {e}")
+        await websocket.close(code=4003)
+        return
 
     # Validate and restore session if it exists in DB (e.g., after server restart)
     if session_id not in active_games or session_id not in active_game_colors:
         db = _get_db()
         try:
-            session_row = db.query(SessionModel).filter(
+            session_row = db.query(SessionModel).join(Game).filter(
                 SessionModel.id == session_id,
-                SessionModel.is_active == True
+                SessionModel.is_active == True,
+                Game.user_id == user_id
             ).first()
             if session_row:
                 active_games[session_id] = chess.Board(session_row.current_fen)
                 active_game_colors[session_id] = session_row.player_color
+                active_game_users[session_id] = user_id
                 
                 # Reconstruct move count
                 from backend.db.models import MoveRecord as MoveRecordModel
@@ -277,9 +293,9 @@ async def websocket_game(websocket: WebSocket, session_id: str):
         finally:
             db.close()
 
-    # Re-verify session exists
-    if session_id not in active_games or session_id not in active_game_colors:
-        logger.warning(f"Rejected WS connection: session {session_id} does not exist in memory or DB.")
+    # Re-verify session exists and belongs to the current user
+    if session_id not in active_games or session_id not in active_game_colors or active_game_users.get(session_id) != user_id:
+        logger.warning(f"Rejected WS connection: session {session_id} does not exist in memory/DB or is unauthorized for user {user_id}.")
         await websocket.close(code=4003)
         return
 
