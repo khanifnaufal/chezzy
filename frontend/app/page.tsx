@@ -199,10 +199,11 @@ function FloatingPiece({ piece, style }: { piece: string; style: React.CSSProper
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function LandingPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const heroRef = useRef<HTMLDivElement>(null);
 
   const handleNewGame = () => {
+    if (loading) return; // Prevent action while checking authentication state
     if (!user) {
       router.push('/login');
     } else {
