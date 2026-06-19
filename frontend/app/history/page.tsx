@@ -8,6 +8,7 @@ import MoveList, { Move } from '../../components/MoveList';
 import { getGames, getGameDetail } from '../../lib/api';
 import { GameSummary, GameDetail } from '../../lib/types';
 import { Sparkles, Check, CheckCheck, AlertTriangle, X, Skull, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Info } from 'lucide-react';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function HistoryPage() {
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -268,7 +269,8 @@ export default function HistoryPage() {
   const activeMove = gameDetail && currentMoveIndex >= 0 ? gameDetail.moves[currentMoveIndex] : null;
 
   return (
-    <div className="h-[calc(100vh-70px)] md:h-[calc(100vh-73px)] w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center overflow-hidden">
+    <ProtectedRoute>
+      <div className="h-[calc(100vh-70px)] md:h-[calc(100vh-73px)] w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center overflow-hidden">
       <div className="w-full max-w-7xl flex-1 flex flex-col min-h-0 p-4 md:p-6 gap-4 animate-fade-in">
         
         {/* Title / Header Bar */}
@@ -617,5 +619,6 @@ export default function HistoryPage() {
 
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

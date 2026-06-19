@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import Board, { BoardRef } from '../../components/Board';
 import EvalBar from '../../components/EvalBar';
 import MoveList, { Move } from '../../components/MoveList';
@@ -784,10 +785,12 @@ function ChessAnalyzerApp() {
 
 export default function GamePage() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <React.Suspense fallback={null}>
-        <ChessAnalyzerApp />
-      </React.Suspense>
-    </QueryClientProvider>
+    <ProtectedRoute>
+      <QueryClientProvider client={queryClient}>
+        <React.Suspense fallback={null}>
+          <ChessAnalyzerApp />
+        </React.Suspense>
+      </QueryClientProvider>
+    </ProtectedRoute>
   );
 }

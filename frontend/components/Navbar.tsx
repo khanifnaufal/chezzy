@@ -113,6 +113,15 @@ export default function Navbar() {
                       <p className="text-sm font-medium text-slate-300 truncate">{user.email}</p>
                     </div>
 
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-slate-100 hover:bg-slate-800/40 transition mb-1.5"
+                    >
+                      <User className="w-4 h-4 shrink-0" />
+                      <span>Profile</span>
+                    </Link>
+
                     {/* Mobile nav fallback inside dropdown */}
                     <div className="md:hidden flex flex-col gap-0.5 border-b border-slate-800/80 pb-1.5 mb-1.5">
                       {links.map((link) => (

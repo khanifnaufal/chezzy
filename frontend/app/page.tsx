@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { motion, useInView, type Variants } from 'framer-motion';
+import ProtectedRoute from '../components/ProtectedRoute';
 import { useRef, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { 
