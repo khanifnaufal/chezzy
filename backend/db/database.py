@@ -9,8 +9,6 @@ logger = logging.getLogger("chess_analyzer")
 # ---------------------------------------------------------------------------
 # Engine & Session Factory
 # ---------------------------------------------------------------------------
-# Jika DATABASE_URL belum dikonfigurasi, gunakan SQLite in-memory sebagai fallback
-# agar server tetap bisa berjalan tanpa PostgreSQL.
 _effective_url = DATABASE_URL if DATABASE_URL else "sqlite:///./chess_dev.db"
 
 if not DATABASE_URL:
@@ -19,12 +17,21 @@ if not DATABASE_URL:
         "Data will NOT be persisted across restarts in a reliable way."
     )
 
+# SQLAlchemy's synchronous create_engine requires a synchronous driver (psycopg2)
+# while the DATABASE_URL environment variable might specify an asynchronous driver (asyncpg).
+if _effective_url.startswith("postgresql+asyncpg://"):
+    _engine_url = _effective_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+elif _effective_url.startswith("postgresql://"):
+    _engine_url = _effective_url.replace("postgresql://", "postgresql+psycopg2://")
+else:
+    _engine_url = _effective_url
+
 engine = create_engine(
-    _effective_url,
+    _engine_url,
     # pool_pre_ping agar koneksi stale tidak dipakai kembali
     pool_pre_ping=True,
     # Untuk SQLite perlu flag khusus karena tidak mendukung multi-thread check
-    connect_args={"check_same_thread": False} if _effective_url.startswith("sqlite") else {},
+    connect_args={"check_same_thread": False} if _engine_url.startswith("sqlite") else {},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

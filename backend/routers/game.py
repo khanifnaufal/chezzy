@@ -96,6 +96,7 @@ def start_game(request: StartGameRequest, db: DbSession = Depends(get_db), user_
         session_row = SessionModel(
             id=session_id,
             game_id=session_id,
+            user_id=user_id,
             player_color=request.playerColor,
             current_fen=start_board.fen(),
             is_active=True,

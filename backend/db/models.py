@@ -49,6 +49,7 @@ class Session(Base):
     """Melacak sesi game yang sedang aktif."""
     __tablename__ = "sessions"
 
+    user_id      = Column(String, nullable=True)
     id           = Column(String, primary_key=True, index=True)   # sama dengan session_id
     game_id      = Column(String, ForeignKey("games.id", ondelete="SET NULL"), nullable=True, index=True)
     player_color = Column(String, nullable=False, default="white")
